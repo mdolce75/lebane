@@ -27,6 +27,9 @@ import jakarta.persistence.metamodel.SingularAttribute;
  */
 public final class DepartamentoSpecifications {
 
+    /** Carácter de escape de LIKE; {@link #escaparLike(String)} usa el mismo. */
+    static final char ESCAPE = '\\';
+
     private DepartamentoSpecifications() {
     }
 
@@ -47,15 +50,16 @@ public final class DepartamentoSpecifications {
     }
 
     /**
-     * {@code lower(titulo) LIKE '%texto%'}, resuelto con el índice GIN de trigramas. Los comodines del usuario se
-     * escapan con la barra invertida (carácter de escape por defecto de PostgreSQL): buscar "50%" busca el literal.
+     * {@code lower(titulo) LIKE '%texto%' ESCAPE '\'}, resuelto con el índice GIN de trigramas. Los comodines del
+     * usuario ({@code %}, {@code _}) se escapan: buscar "50%" busca el literal. El carácter de escape se declara
+     * explícitamente porque, si no, Hibernate genera {@code ESCAPE ''}, que en PostgreSQL desactiva el escape.
      */
     static Specification<Departamento> tituloContiene(String texto) {
         if (texto == null) {
             return null;
         }
         String patron = "%" + escaparLike(texto.toLowerCase(Locale.ROOT)) + "%";
-        return (root, query, cb) -> cb.like(cb.lower(root.get(Departamento_.titulo)), patron);
+        return (root, query, cb) -> cb.like(cb.lower(root.get(Departamento_.titulo)), patron, ESCAPE);
     }
 
     /** {@code lower(ciudad) = ?}, resuelto con el índice de expresión {@code lower(ciudad)}. */
