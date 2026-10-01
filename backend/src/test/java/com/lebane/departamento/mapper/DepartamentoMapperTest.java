@@ -20,13 +20,13 @@ import com.lebane.departamento.entity.Imagen;
 import com.lebane.departamento.entity.Moneda;
 import com.lebane.departamento.repository.DepartamentoAgregados;
 import com.lebane.departamento.repository.DepartamentoListadoRow;
-import com.lebane.storage.config.StorageProperties;
+import com.lebane.storage.TestStorageProperties;
 import com.lebane.storage.service.PublicBucketImageUrlResolver;
 
 class DepartamentoMapperTest {
 
     private final DepartamentoMapper mapper = new DepartamentoMapper(
-            new PublicBucketImageUrlResolver(new StorageProperties("http://localhost:9000/", "lebane-images")));
+            new PublicBucketImageUrlResolver(TestStorageProperties.of("http://localhost:9000/", "lebane-images")));
 
     @Test
     void newEntityDefaultsToDisponibleAndNormalizesText() {

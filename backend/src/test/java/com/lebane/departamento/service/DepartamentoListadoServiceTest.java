@@ -32,7 +32,7 @@ import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.DepartamentoAgregados;
 import com.lebane.departamento.repository.DepartamentoListadoRow;
 import com.lebane.departamento.repository.DepartamentoRepository;
-import com.lebane.storage.config.StorageProperties;
+import com.lebane.storage.TestStorageProperties;
 import com.lebane.storage.service.PublicBucketImageUrlResolver;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,7 +46,7 @@ class DepartamentoListadoServiceTest {
     @BeforeEach
     void setUp() {
         service = new DepartamentoListadoService(repository, new DepartamentoMapper(
-                new PublicBucketImageUrlResolver(new StorageProperties("http://cdn", "b"))));
+                new PublicBucketImageUrlResolver(TestStorageProperties.of("http://cdn", "b"))));
     }
 
     @Test

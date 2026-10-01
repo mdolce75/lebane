@@ -23,7 +23,7 @@ import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
 import com.lebane.departamento.mapper.ConsultaMapper;
 import com.lebane.departamento.mapper.DepartamentoMapper;
-import com.lebane.storage.config.StorageProperties;
+import com.lebane.storage.TestStorageProperties;
 import com.lebane.storage.service.PublicBucketImageUrlResolver;
 import com.lebane.support.PostgresContainer;
 
@@ -41,7 +41,7 @@ import jakarta.persistence.EntityManager;
 class PersistenceIT {
 
     private final DepartamentoMapper mapper = new DepartamentoMapper(
-            new PublicBucketImageUrlResolver(new StorageProperties("http://localhost:9000", "bucket")));
+            new PublicBucketImageUrlResolver(TestStorageProperties.of("http://localhost:9000", "bucket")));
 
     @Autowired
     private DepartamentoRepository departamentoRepository;

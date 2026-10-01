@@ -45,7 +45,8 @@ spring:
   servlet:
     multipart:
       max-file-size: ${UPLOAD_MAX_FILE_SIZE:5MB}
-      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:30MB}
+      # Una imagen por request: el request apenas supera al archivo.
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:6MB}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -72,9 +73,24 @@ lebane:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   storage:
-    # URL pública con la que el navegador accede a las imágenes (bucket con lectura pública).
+    # Endpoint interno (backend -> MinIO) y URL pública (navegador -> MinIO; bucket con lectura pública).
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
     public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000}
+    # Sin defaults: credenciales solo por variables de entorno.
+    access-key: ${STORAGE_ACCESS_KEY:}
+    secret-key: ${STORAGE_SECRET_KEY:}
     bucket: ${STORAGE_BUCKET:lebane-images}
+    region: ${STORAGE_REGION:us-east-1}
+    create-bucket: ${STORAGE_CREATE_BUCKET:true}
+    # Mismo límite que el multipart (UPLOAD_MAX_FILE_SIZE).
+    max-file-size: ${UPLOAD_MAX_FILE_SIZE:5MB}
+    connect-timeout: ${STORAGE_CONNECT_TIMEOUT:2s}
+  address:
+    provider: ${ADDRESS_PROVIDER:stub}
+    url: ${ADDRESS_PROVIDER_URL:https://apis.datos.gob.ar/georef/api}
+    api-key: ${ADDRESS_PROVIDER_API_KEY:}
+    timeout: ${ADDRESS_PROVIDER_TIMEOUT_MS:2000}ms
+    max-results: ${ADDRESS_PROVIDER_MAX_RESULTS:5}
   seed:
     # Datos de ejemplo idempotentes. Deshabilitado por defecto; .env.example lo habilita para desarrollo local.
     enabled: ${SEED_ENABLED:false}
@@ -87,6 +103,56 @@ lebane:
       enabled: ${LOGSTASH_ENABLED:false}
       host: ${LOGSTASH_HOST:logstash}
       port: ${LOGSTASH_PORT:5000}
+
+# Resiliencia de integraciones externas. Cada instancia combina Retry ( CircuitBreaker ( TimeLimiter ( llamada ) ) )
+# (ver ResilientExecutor). Solo los fallos transitorios (red, 5xx, timeouts) se reintentan y abren el circuito.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: ${R4J_CB_WINDOW_SIZE:20}
+        minimum-number-of-calls: ${R4J_CB_MIN_CALLS:5}
+        failure-rate-threshold: ${R4J_CB_FAILURE_RATE:50}
+        wait-duration-in-open-state: ${R4J_CB_WAIT_OPEN:30s}
+        permitted-number-of-calls-in-half-open-state: ${R4J_CB_HALF_OPEN_CALLS:2}
+        automatic-transition-from-open-to-half-open-enabled: false
+        record-exception-predicate: com.lebane.resilience.TransientFailurePredicate
+        # Los health indicators de los circuitos no se registran: una dependencia opcional caída no debe volver
+        # DOWN el health ni el readiness.
+        register-health-indicator: false
+    instances:
+      storage:
+        base-config: default
+      address:
+        base-config: default
+  retry:
+    configs:
+      default:
+        max-attempts: ${R4J_RETRY_MAX_ATTEMPTS:3}
+        wait-duration: ${R4J_RETRY_WAIT:200ms}
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exception-predicate: com.lebane.resilience.TransientFailurePredicate
+    instances:
+      storage:
+        base-config: default
+      address:
+        base-config: default
+        # Autocompletado interactivo: un solo reintento para no hacer esperar al usuario.
+        max-attempts: ${ADDRESS_RETRY_MAX_ATTEMPTS:2}
+  timelimiter:
+    configs:
+      default:
+        cancel-running-future: true
+        timeout-duration: 5s
+    instances:
+      storage:
+        base-config: default
+        timeout-duration: ${STORAGE_TIMEOUT:10s}
+      address:
+        base-config: default
+        timeout-duration: ${ADDRESS_PROVIDER_TIMEOUT_MS:2000}ms
 
 management:
   # Por defecto Actuator comparte el puerto de la app. Para aislarlo en red interna definir

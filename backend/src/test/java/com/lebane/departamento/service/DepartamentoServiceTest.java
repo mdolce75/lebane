@@ -30,7 +30,7 @@ import com.lebane.departamento.repository.DepartamentoRepository;
 import com.lebane.departamento.repository.ImagenRepository;
 import com.lebane.exception.PreconditionFailedException;
 import com.lebane.exception.ResourceNotFoundException;
-import com.lebane.storage.config.StorageProperties;
+import com.lebane.storage.TestStorageProperties;
 import com.lebane.storage.service.PublicBucketImageUrlResolver;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,7 +46,7 @@ class DepartamentoServiceTest {
     private CodigoDepartamentoGenerator codigoGenerator;
 
     private final DepartamentoMapper mapper = new DepartamentoMapper(
-            new PublicBucketImageUrlResolver(new StorageProperties("http://localhost:9000", "bucket")));
+            new PublicBucketImageUrlResolver(TestStorageProperties.of("http://localhost:9000", "bucket")));
     private DepartamentoService service;
 
     @BeforeEach

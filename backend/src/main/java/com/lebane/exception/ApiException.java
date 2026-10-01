@@ -1,5 +1,7 @@
 package com.lebane.exception;
 
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 
 /**
@@ -10,11 +12,17 @@ public abstract class ApiException extends RuntimeException {
 
     private final HttpStatus status;
     private final ErrorCode errorCode;
+    private final Map<String, String> fieldErrors;
 
     protected ApiException(HttpStatus status, ErrorCode errorCode, String message) {
+        this(status, errorCode, message, Map.of());
+    }
+
+    protected ApiException(HttpStatus status, ErrorCode errorCode, String message, Map<String, String> fieldErrors) {
         super(message);
         this.status = status;
         this.errorCode = errorCode;
+        this.fieldErrors = Map.copyOf(fieldErrors);
     }
 
     public HttpStatus getStatus() {
@@ -23,5 +31,9 @@ public abstract class ApiException extends RuntimeException {
 
     public ErrorCode getErrorCode() {
         return errorCode;
+    }
+
+    public Map<String, String> getFieldErrors() {
+        return fieldErrors;
     }
 }

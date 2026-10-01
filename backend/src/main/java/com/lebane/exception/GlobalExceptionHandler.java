@@ -38,6 +38,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -70,8 +72,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ApiError> handleApi(ApiException ex, HttpServletRequest request) {
+        // Los 503 por dependencias ya los registró el servicio que la invocó (con proveedor, causa y duración).
         logClientError(ex.getErrorCode(), ex.getStatus(), ex);
-        return respond(ex.getStatus(), ex.getErrorCode(), ex.getMessage(), request, Map.of());
+        return respond(ex.getStatus(), ex.getErrorCode(), ex.getMessage(), request, ex.getFieldErrors());
     }
 
     // ---------- Validación y formato de entrada ----------
@@ -124,6 +127,19 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> handleMissingParameter(MissingServletRequestParameterException ex,
             HttpServletRequest request) {
         return validationError(request, Map.of(ex.getParameterName(), "es obligatorio"));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex, HttpServletRequest request) {
+        return validationError(request, Map.of(ex.getRequestPartName(), "es obligatorio"));
+    }
+
+    /** Request que no es multipart (o multipart mal formado) en un endpoint de subida. */
+    @ExceptionHandler(MultipartException.class)
+    ResponseEntity<ApiError> handleMultipart(MultipartException ex, HttpServletRequest request) {
+        logClientError(ErrorCode.BAD_REQUEST, HttpStatus.BAD_REQUEST, ex);
+        return respond(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST,
+                "La solicitud debe ser multipart/form-data con el archivo en el campo 'archivo'", request, Map.of());
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
