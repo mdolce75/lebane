@@ -3,7 +3,7 @@
   JSON estructurado a stdout (Docker / producción).
   Campos: @timestamp, level, logger, thread, message, service, application, environment,
   MDC (requestId, traceId, spanId) y argumentos estructurados (method, path, status, durationMs, ...).
-  Incluido desde logback-spring.xml cuando LOG_FORMAT != text.
+  Incluido desde logback-spring.xml cuando LOG_FORMAT=json (default).
 -->
 <included>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

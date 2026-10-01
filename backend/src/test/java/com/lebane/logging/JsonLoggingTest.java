@@ -20,6 +20,10 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.core.status.Status;
+import ch.qos.logback.core.status.StatusUtil;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -92,6 +96,15 @@ class JsonLoggingTest {
         for (String line : lines) {
             assertThat(mapper.readTree(line).isObject()).as("Línea no JSON: %s", line).isTrue();
         }
+    }
+
+    @Test
+    void logbackConfigurationHasNoWarnings() {
+        // Los warnings de configuración de Logback se imprimen en texto plano y romperían el stream JSON.
+        LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        assertThat(new StatusUtil(context).getHighestLevel(0))
+                .as("Estados de Logback: %s", context.getStatusManager().getCopyOfStatusList())
+                .isLessThan(Status.WARN);
     }
 
     private Optional<JsonNode> findEvent(CapturedOutput output, String requestId, String logger) {

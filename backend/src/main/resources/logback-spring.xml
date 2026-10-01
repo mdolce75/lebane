@@ -2,9 +2,9 @@
 <!--
   Configuración de logging de Lebane.
 
-  - LOG_FORMAT=json  (default): JSON estructurado a stdout (logback-prod.xml).
-  - LOG_FORMAT=text           : texto legible para desarrollo local (logback-dev.xml).
-  - LOGSTASH_ENABLED=true     : además envía JSON a Logstash por TCP, de forma asíncrona y no bloqueante.
+  - LOG_FORMAT=json  (default): JSON estructurado a stdout (logback-format-json.xml).
+  - LOG_FORMAT=text           : texto legible para desarrollo local (logback-format-text.xml).
+  - LOGSTASH_ENABLED=true     : además envía JSON a Logstash por TCP, asíncrono y no bloqueante (logback-logstash-true.xml).
 
   Los valores se leen del Environment de Spring (application.yml -> variables de entorno).
 -->
@@ -24,20 +24,17 @@
     <property name="LOG_CUSTOM_FIELDS"
               value="{&quot;service&quot;:&quot;${LOG_SERVICE_NAME}&quot;,&quot;application&quot;:&quot;${LOG_APPLICATION}&quot;,&quot;environment&quot;:&quot;${LOG_ENVIRONMENT}&quot;}"/>
 
-    <if condition='"text".equalsIgnoreCase(property("LOG_FORMAT"))'>
-        <then>
-            <include resource="logback-dev.xml"/>
-        </then>
-        <else>
-            <include resource="logback-prod.xml"/>
-        </else>
-    </if>
-
-    <if condition='"true".equalsIgnoreCase(property("LOGSTASH_ENABLED"))'>
-        <then>
-            <include resource="logback-logstash.xml"/>
-        </then>
-    </if>
+    <!--
+      Sin <if>: en Logback 1.5.x el atributo "condition" está deprecado y Spring Boot imprime ese warning en stdout
+      como texto plano (rompe el stream JSON); el reemplazo <condition> no ejecuta ninguna rama en 1.5.20.
+      La selección se hace con includes parametrizados:
+      - Formato (obligatorio): logback-format-json.xml | logback-format-text.xml. LOG_FORMAT se valida al arrancar
+        (LoggingProperties): un valor inválido detiene la aplicación en lugar de dejarla sin logs.
+      - Logstash (opcional): solo existe logback-logstash-true.xml; con cualquier otro valor no se incluye nada,
+        no se crea el appender TCP y no hay intentos de conexión.
+    -->
+    <include resource="logback-format-${LOG_FORMAT}.xml"/>
+    <include optional="true" resource="logback-logstash-${LOGSTASH_ENABLED}.xml"/>
 
     <!-- Los appenders se asocian a root dentro de cada archivo incluido. Nivel efectivo: logging.level.root -->
     <root level="INFO"/>

@@ -21,7 +21,6 @@
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
-        <janino.version>3.1.12</janino.version>
         <!-- 1.21.3 (gestionada por Boot 3.5.7) no es compatible con Docker Engine 29+ (API mínima 1.44). -->
         <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
@@ -75,13 +74,6 @@
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
             <version>${logstash-logback-encoder.version}</version>
-        </dependency>
-        <!-- Condicionales <if> en logback-spring.xml (LOG_FORMAT / LOGSTASH_ENABLED) -->
-        <dependency>
-            <groupId>org.codehaus.janino</groupId>
-            <artifactId>janino</artifactId>
-            <version>${janino.version}</version>
-            <scope>runtime</scope>
         </dependency>
 
         <dependency>

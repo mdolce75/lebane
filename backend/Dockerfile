@@ -21,8 +21,10 @@ COPY --from=build --chown=lebane:lebane /workspace/extracted/snapshot-dependenci
 COPY --from=build --chown=lebane:lebane /workspace/extracted/application/ ./
 USER lebane:lebane
 EXPOSE 8080
-# Opciones de JVM vía JAVA_TOOL_OPTIONS (definidas en docker-compose / .env).
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+# Opciones de JVM vía JAVA_OPTS (docker-compose / .env). No se usa JAVA_TOOL_OPTIONS porque la JVM imprime
+# "Picked up JAVA_TOOL_OPTIONS" en texto plano y rompe el formato JSON de los logs.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health/readiness || exit 1
-ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+# exec: la JVM queda como PID 1 y recibe SIGTERM (graceful shutdown).
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]

@@ -229,11 +229,14 @@ Resilience4j y storage se agregan en la Fase 4.
 
 | `LOG_FORMAT` | Salida | Archivo |
 |---|---|---|
-| `json` (default) | JSON por línea a stdout (Logstash Logback Encoder) | `logback-prod.xml` |
-| `text` | Texto legible con requestId/traceId | `logback-dev.xml` |
-| + `LOGSTASH_ENABLED=true` | Además TCP asíncrono a Logstash | `logback-logstash.xml` |
+| `json` (default) | JSON por línea a stdout (Logstash Logback Encoder) | `logback-format-json.xml` |
+| `text` | Texto legible con requestId/traceId | `logback-format-text.xml` |
+| + `LOGSTASH_ENABLED=true` | Además TCP asíncrono a Logstash | `logback-logstash-true.xml` |
 
-`logback-spring.xml` selecciona los archivos según las variables (condicionales con Janino).
+`logback-spring.xml` selecciona los archivos con includes parametrizados (`logback-format-${LOG_FORMAT}.xml` y, opcional,
+`logback-logstash-${LOGSTASH_ENABLED}.xml`), sin condicionales `<if>`: en Logback 1.5 el atributo `condition` está
+deprecado y Spring Boot imprime ese aviso en stdout como texto plano, lo que rompía el stream JSON. `LOG_FORMAT`
+(`json`|`text`) y `LOGSTASH_ENABLED` (`true`|`false`, en minúsculas) se validan al arrancar (`LoggingProperties`).
 
 Ejemplo de access log:
 
@@ -354,7 +357,7 @@ Tests de la Fase 1:
   perfil). Ejecutar los comandos de [Tests](#tests) y [Docker Compose](#ejecución-con-docker-compose) antes de
   continuar con la Fase 2.
 - Versiones de dependencias fijadas sin poder consultar los repositorios: Spring Boot `3.5.7`, Logstash Logback
-  Encoder `8.1`, Janino `3.1.12`, Elastic `8.19.4`; rangos `^` en npm. Si alguna no resolviera, subir al último
+  Encoder `8.1`, Elastic `8.19.4`; rangos `^` en npm. Si alguna no resolviera, subir al último
   patch disponible.
 - No hay `package-lock.json` ni Maven Wrapper: generarlos con `npm install` y `mvn wrapper:wrapper` y commitearlos.
 - La API de dominio, MinIO, Resilience4j y el seed llegan en las fases siguientes.

@@ -31,6 +31,6 @@ Para logs legibles en consola: `LOG_FORMAT=text`.
 |---|---|
 | `application.yml` | Configuración por variables de entorno, Actuator, health groups, métricas, tracing |
 | `logback-spring.xml` | Selección de salida según `LOG_FORMAT` / `LOGSTASH_ENABLED` |
-| `logback-prod.xml` | JSON a stdout con enmascarado de secretos |
-| `logback-dev.xml` | Texto legible con requestId/traceId |
-| `logback-logstash.xml` | Appender TCP asíncrono y no bloqueante a Logstash |
+| `logback-format-json.xml` | JSON a stdout con enmascarado de secretos (`LOG_FORMAT=json`) |
+| `logback-format-text.xml` | Texto legible con requestId/traceId (`LOG_FORMAT=text`) |
+| `logback-logstash-true.xml` | Appender TCP asíncrono y no bloqueante a Logstash (`LOGSTASH_ENABLED=true`) |
