@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -34,11 +35,13 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
         "resilience4j.circuitbreaker.instances.address.wait-duration-in-open-state=1s"
 })
 @AutoConfigureMockMvc
+@AutoConfigureObservability
 @ActiveProfiles("nodb")
 @ExtendWith(OutputCaptureExtension.class)
 class AddressResilienceIT {
 
     private static final String URL = "/api/v1/direcciones/autocompletar";
+    private static final String TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
     private static final FakeGeorefServer GEOREF = startServer();
 
     @DynamicPropertySource
@@ -59,12 +62,16 @@ class AddressResilienceIT {
     @Test
     void degradesOpensTheCircuitAndRecovers(CapturedOutput output) throws Exception {
         GEOREF.reset();
-        mockMvc.perform(get(URL).param("q", "Libertador 4850").header("X-Request-Id", "addr-it-1"))
+        mockMvc.perform(get(URL).param("q", "Libertador 4850").header("X-Request-Id", "addr-it-1")
+                        .header("traceparent", "00-" + TRACE_ID + "-00f067aa0ba902b7-01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.proveedor").value("georef"))
                 .andExpect(jsonPath("$.degradado").value(false))
                 .andExpect(jsonPath("$.sugerencias[0].calle").value("Av. Del Libertador"));
+        // Correlación hacia el proveedor: el mismo requestId y la misma traza (nuevo span hijo).
         assertThat(GEOREF.requestIds()).contains("addr-it-1");
+        assertThat(GEOREF.traceparents()).singleElement().satisfies(traceparent ->
+                assertThat(traceparent).startsWith("00-" + TRACE_ID + "-").doesNotContain("00f067aa0ba902b7"));
 
         // Proveedor caído: 2 intentos por consulta; con 3 consultas (6 fallos) el circuito se abre.
         GEOREF.respond(503, "{}");

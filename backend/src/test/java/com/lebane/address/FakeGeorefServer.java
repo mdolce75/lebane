@@ -34,6 +34,7 @@ public final class FakeGeorefServer implements AutoCloseable {
     private final AtomicReference<Respuesta> respuesta = new AtomicReference<>(new Respuesta(200, RESPUESTA_OK, 0));
     private final List<String> queries = new CopyOnWriteArrayList<>();
     private final List<String> requestIds = new CopyOnWriteArrayList<>();
+    private final List<String> traceparents = new CopyOnWriteArrayList<>();
 
     public FakeGeorefServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -62,10 +63,15 @@ public final class FakeGeorefServer implements AutoCloseable {
         return requestIds;
     }
 
+    public List<String> traceparents() {
+        return traceparents;
+    }
+
     public void reset() {
         respuesta.set(new Respuesta(200, RESPUESTA_OK, 0));
         queries.clear();
         requestIds.clear();
+        traceparents.clear();
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -73,6 +79,10 @@ public final class FakeGeorefServer implements AutoCloseable {
         String requestId = exchange.getRequestHeaders().getFirst("X-Request-Id");
         if (requestId != null) {
             requestIds.add(requestId);
+        }
+        String traceparent = exchange.getRequestHeaders().getFirst("traceparent");
+        if (traceparent != null) {
+            traceparents.add(traceparent);
         }
         Respuesta actual = respuesta.get();
         try {
