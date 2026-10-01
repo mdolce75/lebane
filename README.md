@@ -4,10 +4,11 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fases 1 y 2 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
+> **Estado:** Fases 1 a 3 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
 > logging JSON, correlation ID, Docker Compose y perfil ELK. Fase 2: modelo de datos, migraciones Flyway, API de
-> alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Ver
-> [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
+> alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Fase 3: listado
+> paginado con Specifications y Criteria API, agregados en PostgreSQL, índices y validación sin full scans ni N+1
+> con 100k departamentos. Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -23,6 +24,8 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 - [Endpoints](#endpoints)
 - [Errores](#errores)
 - [Seed de datos](#seed-de-datos)
+- [Listado: paginación, filtros y orden](#listado-paginación-filtros-y-orden)
+- [Validación de performance](#validación-de-performance)
 - [Actuator, liveness y readiness](#actuator-liveness-y-readiness)
 - [Logging estructurado](#logging-estructurado)
 - [Correlation ID](#correlation-id)
@@ -60,14 +63,14 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 │   └── src/main/java/com/lebane
 │       ├── config          Seguridad, CORS, auditoría JPA, propiedades
 │       ├── departamento    controller · dto (+ validation) · entity · mapper · repository · service
-│       │                   (listado paginado con Specifications: Fase 3)
+│       │                   repository: Specifications + fragmento Criteria/SQL del listado
 │       ├── address         client · dto · provider · service                          (Fase 4)
 │       ├── storage         config · service: URL pública de imágenes; subida a MinIO en Fase 4
 │       ├── resilience      Configuración y eventos de Resilience4j                    (Fase 4)
 │       ├── logging         filter (X-Request-Id + access log) · interceptor (propagación saliente)
 │       ├── exception       ApiError, ErrorCode, GlobalExceptionHandler, ApiErrorController (/error)
 │       └── seed            Seed idempotente (SEED_ENABLED)
-│   └── src/main/resources/db/migration   Migraciones Flyway (V1__esquema_inicial.sql)
+│   └── src/main/resources/db/migration   Migraciones Flyway (V1 esquema, V2 índices del listado)
 ├── frontend/               React 19 · TypeScript · Vite · TanStack Query · RHF · Zod · React Router
 ├── observability/logstash/ Pipeline de Logstash
 ├── docker-compose.yml
@@ -101,8 +104,10 @@ departamento 1 ──── 0..N consulta    (FK consulta.departamento_id, @Many
   por fila. Consecuencia visible: los IDs no son consecutivos entre reinicios (cada JVM reserva bloques de 50).
 - **Auditoría** con Spring Data JPA (`@CreatedDate`, `@LastModifiedDate`) y **concurrencia optimista** con
   `@Version`.
-- Los índices del listado (filtros y ordenamientos) se agregan en la Fase 3, junto con las consultas que los usan y
-  su análisis con `EXPLAIN`.
+- Índices del listado (`V2__indices_listado.sql`): uno por orden admitido, con el desempate por `id` al final
+  (`(created_at, id)`, `(estado, created_at, id)`, `(lower(ciudad), created_at, id)`, `(moneda, precio, id)`,
+  `(superficie_m2, id)`) y un GIN de trigramas sobre `lower(titulo)` para la búsqueda de texto. Ver
+  [Validación de performance](#validación-de-performance).
 
 ## Requisitos
 
@@ -212,11 +217,11 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 
 | Método | Ruta | Descripción | Respuestas |
 |---|---|---|---|
+| `GET` | `/api/v1/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
 | `POST` | `/api/v1/departamentos` | Alta | `201` + `Location` + `ETag` · `400` · `409` |
 | `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas) | `200` + `ETag` · `400` · `404` |
 | `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional | `200` + `ETag` · `400` · `404` · `409` · `412` |
 | `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido) |
-| `GET` | `/api/v1/departamentos` | Listado paginado con filtros y ordenamiento | Fase 3 |
 | `POST`/`DELETE` | `/api/v1/departamentos/{id}/imagenes` | Subida y eliminación de fotos | Fase 4 |
 | `GET` | `/api/v1/direcciones/autocompletar` | Autocomplete de direcciones | Fase 4 |
 
@@ -341,6 +346,122 @@ departamentos ficticios en distintas ciudades y estados, con consultas de ejempl
   omite.
 - No depende de servicios externos. Las fotos de ejemplo se agregan con la integración de MinIO (Fase 4).
 - Los datos pasan las mismas validaciones que la API (`SeedDataTest`).
+
+## Listado: paginación, filtros y orden
+
+`GET /api/v1/departamentos` — todo se resuelve en PostgreSQL (filtros, orden, `OFFSET`/`LIMIT`, totales y
+agregados); el cliente nunca recibe más que una página.
+
+| Parámetro | Ejemplo | Regla |
+|---|---|---|
+| `q` | `q=balcón` | Texto contenido en el título, sin distinguir mayúsculas. 3 a 100 caracteres. `%` y `_` se buscan literalmente |
+| `ciudad` | `ciudad=rosario` | Ciudad exacta, sin distinguir mayúsculas |
+| `estado` | `estado=DISPONIBLE&estado=RESERVADO` o `estado=DISPONIBLE,RESERVADO` | Uno o más de `DISPONIBLE`, `RESERVADO`, `VENDIDO` |
+| `moneda` | `moneda=USD` | `ARS` o `USD`. **Obligatoria si se filtra por precio** (no se comparan montos de distintas monedas) |
+| `precioMin` / `precioMax` | `precioMin=100000&precioMax=200000` | ≥ 0, mínimo ≤ máximo |
+| `superficieMin` / `superficieMax` | `superficieMin=40` | m², ≥ 0, mínimo ≤ máximo |
+| `ambientesMin` / `dormitoriosMin` / `banosMin` | `ambientesMin=3` | Mínimos |
+| `conImagenes` | `conImagenes=true` | `true`: solo con fotos; `false`: solo sin fotos |
+| `page` | `page=0` | Desde 0. Default 0 |
+| `size` | `size=20` | 1..100. Default 20 |
+| `sort` | `sort=precio,asc` | `createdAt` (default, `desc`), `precio` (dentro de cada moneda), `superficieM2`; con `,asc` o `,desc` |
+
+Ventana máxima: `(page + 1) × size ≤ 10.000`. Con `OFFSET`, PostgreSQL recorre y descarta las filas anteriores; más
+allá de esa profundidad se pide refinar los filtros (`400` en `page`).
+
+```bash
+curl 'http://localhost:8080/api/v1/departamentos?estado=DISPONIBLE&moneda=USD&precioMax=200000&sort=precio,asc&size=2'
+```
+
+```json
+{
+  "content": [
+    {
+      "id": 7, "codigo": "SEED-0007", "titulo": "2 ambientes reciclado en San Telmo",
+      "precio": 89000.0, "moneda": "USD", "ambientes": 2, "dormitorios": 1, "banos": 1, "superficieM2": 45.0,
+      "estado": "DISPONIBLE", "ciudad": "Ciudad Autónoma de Buenos Aires", "provincia": "CABA",
+      "imagenPrincipalUrl": null, "cantidadImagenes": 0, "cantidadConsultas": 0,
+      "createdAt": "2026-10-01T19:32:32.839995Z"
+    }
+  ],
+  "page": {"size": 2, "number": 0, "totalElements": 7, "totalPages": 4}
+}
+```
+
+(Respuesta real con el seed; `content` recortado al primer ítem.) Cada ítem trae solo lo que muestra la tarjeta del listado (sin descripción, dirección completa ni lista de fotos).
+`imagenPrincipalUrl` es la foto de menor posición, o `null` si no tiene (el frontend muestra un placeholder). El
+formato de página es el estándar de Spring Data (`PagedModel`).
+
+### Cómo se ejecuta (3 consultas fijas por página)
+
+```
+1. Página    Specification + Criteria API, proyección directa a DTO (select new ...):
+             SELECT id, codigo, titulo, precio, ... FROM departamento WHERE <filtros>
+             ORDER BY <índice> OFFSET ? FETCH FIRST ? ROWS ONLY
+2. Total     JpaSpecificationExecutor.count(spec): mismos predicados, sin JOINs.
+             Se omite cuando el total se deduce de la página (p. ej. primera página incompleta).
+3. Agregados Solo para los IDs de la página, en una consulta:
+             subconsultas GROUP BY sobre imagen y consulta (COUNT, MIN(posicion)) unidas con LEFT JOIN,
+             + JOIN a la imagen de menor posición = imagen principal.
+```
+
+- **Sin full scans**: cada filtro y orden usa un índice (ver [Validación de performance](#validación-de-performance)).
+- **Sin N+1**: la cantidad de consultas no depende del tamaño de página ni de las fotos o consultas
+  (`ListadoIT`, `ListadoPerformanceIT`). No se cargan entidades (`entityLoadCount = 0`).
+- **Sin multiplicación de filas**: los filtros nunca hacen JOIN a colecciones (`conImagenes` usa `EXISTS`), así que
+  el `COUNT` es directo. Los agregados se agrupan por tabla **antes** del JOIN: a lo sumo una fila por
+  departamento, por lo que `COUNT(*)` es exacto y no hace falta `COUNT(DISTINCT ...)`. Unir `departamento ×
+  imagen × consulta` y luego agrupar multiplicaría filas (fotos × consultas) y obligaría a `COUNT(DISTINCT)` sobre
+  ese producto.
+- **SQL nativo solo para los agregados**: las tablas derivadas en el `FROM` (subconsultas agregadas unidas con
+  `LEFT JOIN`) no existen en JPQL ni en la Criteria API estándar. La consulta es fija y con parámetros enlazados.
+- **Orden por lista blanca** (`CampoOrden`): ningún nombre de propiedad enviado por el cliente llega a la consulta.
+  Siempre termina en `id` para que la paginación sea determinística con valores repetidos.
+
+## Validación de performance
+
+Medido con **100.000 departamentos, ~200.000 imágenes y ~300.000 consultas** (`perf/datos-volumen.sql`), después
+de `VACUUM ANALYZE`.
+
+**Automático** — `ListadoPerformanceIT` (en `./mvnw verify`, con un PostgreSQL propio): para 11 escenarios
+(orden por defecto, página profunda, estado, ciudad, rango de precio, orden por precio y superficie, búsqueda de
+texto, filtros combinados) verifica con los contadores de PostgreSQL (`pg_stat_user_tables`) que **ninguna**
+consulta hizo *sequential scan* sobre `departamento`, `imagen` ni `consulta`, y que se ejecutan ≤ 3 sentencias. Un
+control negativo comprueba que la medición sí detecta un seq scan real.
+
+**`EXPLAIN (ANALYZE, BUFFERS)`** — `perf/explain-listado.sql`, sobre la misma volumetría:
+
+| Consulta | Plan | Tiempo |
+|---|---|---|
+| Página por defecto (`created_at DESC`) | `Index Scan Backward` en `ix_departamento_created` + `Limit` | 0,2 ms |
+| Página profunda (offset 9.900, 100 filas) | `Index Scan Backward` en `ix_departamento_created` (lee 10.000 entradas) | 3,2 ms |
+| `estado = VENDIDO` (página) | `Index Scan Backward` en `ix_departamento_estado_created` | 0,08 ms |
+| `estado = VENDIDO` (`COUNT`) | `Index Only Scan` en `ix_departamento_estado_created`, `Heap Fetches: 0` | 4,3 ms |
+| `ciudad = rosario` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro (1 de cada 8 coincide) | 0,1 ms |
+| `ciudad = rosario` (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_ciudad_created` | 8,5 ms |
+| USD entre 100k y 200k, orden por precio | `Index Scan` en `ix_departamento_moneda_precio` (rango en el índice) | 0,1 ms |
+| `q = balcón` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro | 0,1 ms |
+| `q = reciclado` + ciudad (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_titulo_trgm` (trigramas) | 22,6 ms |
+| `COUNT` sin filtros | `Index Only Scan` en `pk_departamento`, `Heap Fetches: 0` | 15,9 ms |
+| Agregados de 20 IDs | `Index Only Scan` en `uk_imagen_departamento_posicion` e `ix_consulta_departamento` + `GroupAggregate` | 0,4 ms |
+
+Ningún plan contiene `Seq Scan`. Cuando el filtro es poco selectivo, PostgreSQL elige recorrer el índice del orden
+y filtrar hasta completar la página (más barato que usar el índice del filtro y ordenar). Un `COUNT` exacto debe
+contar todas las filas que cumplen el filtro: sin filtros es O(n) sobre el índice más chico (16 ms con 100k filas).
+Por eso se omite cuando la página permite deducir el total.
+
+Reproducir sobre una base descartable, sin tocar la de desarrollo:
+
+```bash
+P="docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U lebane"
+$P -d lebane -c "CREATE DATABASE lebane_perf"
+$P -d lebane_perf < backend/src/main/resources/db/migration/V1__esquema_inicial.sql
+$P -d lebane_perf < backend/src/main/resources/db/migration/V2__indices_listado.sql
+$P -d lebane_perf < backend/src/test/resources/perf/datos-volumen.sql
+$P -d lebane_perf -c "VACUUM ANALYZE departamento, imagen, consulta"
+$P -d lebane_perf < backend/src/test/resources/perf/explain-listado.sql
+$P -d lebane -c "DROP DATABASE lebane_perf"
+```
 
 ## Actuator, liveness y readiness
 
@@ -483,6 +604,11 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | `PersistenceIT` | Flyway + validación de esquema, auditoría, versión, `CHECK`/`UNIQUE` en la base (máx. 5 fotos, dormitorios, código), orden de imágenes, relaciones LAZY |
 | `DepartamentoApiIT` | ciclo HTTP completo contra PostgreSQL, `If-Match`, consultas, errores y **3 sentencias SQL fijas en el detalle** (sin N+1) |
 | `DevDataSeederIT` | seed al arrancar, idempotente, sin pisar ediciones |
+| `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, moneda obligatoria para precio, ventana máxima |
+| `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |
+| `DepartamentoControllerTest` (listado) | formato `PagedModel`, binding de query params, errores de conversión sin detalles técnicos |
+| `ListadoIT` | filtros, orden, paginación, imagen principal y contadores calculados en PostgreSQL, escape de `%`/`_`, 3 sentencias por página |
+| `ListadoPerformanceIT` | 100k departamentos: sin *seq scans* (`pg_stat_user_tables`) y ≤ 3 sentencias en 11 escenarios, con control negativo |
 | Frontend `httpClient.test.ts` | X-Request-Id, JSON/FormData, normalización de errores sin detalles internos, timeout, red |
 | Frontend `App.test.tsx` | routing, indicador de readiness (UP / 503), 404, política de reintentos |
 | Frontend `ErrorMessage.test.tsx`, `env.test.ts` | errores seguros con requestId, validación de configuración con Zod |
@@ -505,6 +631,15 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - **Validación de método de Spring 6.1**: cuando un handler tiene restricciones en sus parámetros (`@Positive`
   en el id), los errores del body llegan como `HandlerMethodValidationException`; el handler global los desglosa por
   campo igual que los de `@Valid`.
+- **Listado en 3 consultas** (página proyectada + `COUNT` + agregados de la página) en lugar de una sola con
+  `LEFT JOIN ... GROUP BY` sobre todas las filas filtradas: el `GROUP BY` global agregaría fotos y consultas de
+  todos los departamentos que cumplen el filtro antes de paginar. Así solo se agrega lo que se muestra.
+- **Metamodelo JPA estático** (`hibernate-jpamodelgen`, vía `annotationProcessorPaths`): las Specifications y la
+  proyección no usan nombres de atributos en texto; un renombre rompe la compilación, no la ejecución.
+- **`LIKE ... ESCAPE '\'` explícito**: sin él, Hibernate genera `ESCAPE ''`, que en PostgreSQL desactiva el escape y
+  rompía las búsquedas con `%` o `_` (lo detectó `ListadoIT`).
+- **Precio ordenado dentro de cada moneda** (`moneda, precio, id`): ARS y USD no son comparables; filtrar por precio
+  exige `moneda`.
 - **nginx re-resuelve el upstream** (`resolver` + variable en `proxy_pass`): sin esto, tras reiniciar el backend
   nginx seguía usando la IP vieja y respondía 502.
 - **Hikari `connection-timeout` 3 s** para que el probe de readiness responda dentro del timeout del healthcheck (5 s).
@@ -535,7 +670,7 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 |---|---|
 | 1. Infraestructura y observabilidad inicial | **Completa y verificada** (build, 44 tests unitarios + 5 IT backend, 21 tests frontend, Docker Compose con y sin perfil `observability`) |
 | 2. Modelo, persistencia y errores | **Completa y verificada** (109 tests unitarios + 20 IT backend; stack Docker: Flyway, seed idempotente, API directa y vía proxy) |
-| 3. Specifications, Criteria y listado optimizado | Pendiente |
+| 3. Specifications, Criteria y listado optimizado | **Completa y verificada** (131 tests unitarios + 34 IT backend; EXPLAIN ANALYZE con 100k departamentos; endpoint probado directo y vía proxy) |
 | 4. Storage, direcciones, resiliencia y métricas | Pendiente |
 | 4.1 Logging y observabilidad (validación) | Pendiente |
 | 5. Frontend | Pendiente (scaffold, cliente HTTP y routing listos) |
@@ -550,8 +685,14 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
   appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos generados durante la
   caída se descartan (buffer en memoria, sin bloquear requests).
-- El listado paginado (Fase 3), la subida de imágenes a MinIO, el autocomplete y Resilience4j (Fase 4) llegan en
-  las fases siguientes. Mientras tanto, `imagenes` del detalle siempre está vacío salvo datos cargados a mano.
+- La subida de imágenes a MinIO, el autocomplete y Resilience4j llegan en la Fase 4. Mientras tanto, `imagenes` del
+  detalle e `imagenPrincipalUrl` del listado están vacíos salvo datos cargados a mano.
+- Paginación por `OFFSET`, limitada a los primeros 10.000 resultados de cada búsqueda. Para recorridos completos
+  (exportaciones, scroll infinito profundo) convendría paginación por cursor (*keyset*), fuera del alcance.
+- La búsqueda de texto distingue acentos (`balcon` no encuentra `balcón`) y solo busca en el título. Ignorar acentos
+  requiere `unaccent` con un wrapper `IMMUTABLE` indexable; queda como mejora.
+- El total exacto (`totalElements`) de una búsqueda poco selectiva cuesta O(n) sobre un índice (16 ms con 100k
+  filas). Con varios millones de filas convendría un total estimado o un `COUNT` acotado.
 - La API de dominio es pública (el desafío no define usuarios ni roles). Cualquier cliente puede crear y editar
   departamentos; agregar autenticación de usuarios queda fuera del alcance.
 - `ConsultaRequest.email` usa la validación de `@Email` de Hibernate Validator (sintáctica); no se verifica que el
