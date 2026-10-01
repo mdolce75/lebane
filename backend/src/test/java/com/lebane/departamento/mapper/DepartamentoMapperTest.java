@@ -3,6 +3,7 @@ package com.lebane.departamento.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -10,12 +11,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.lebane.departamento.TestFixtures;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
+import com.lebane.departamento.dto.DepartamentoListadoParams;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.dto.DireccionRequest;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
 import com.lebane.departamento.entity.Moneda;
+import com.lebane.departamento.repository.DepartamentoAgregados;
+import com.lebane.departamento.repository.DepartamentoListadoRow;
 import com.lebane.storage.config.StorageProperties;
 import com.lebane.storage.service.PublicBucketImageUrlResolver;
 
@@ -90,5 +94,35 @@ class DepartamentoMapperTest {
         assertThat(detail.imagenes()).extracting("id", "url", "posicion").containsExactly(
                 org.assertj.core.groups.Tuple.tuple(1L, "http://localhost:9000/lebane-images/departamentos/42/a.jpg", 0),
                 org.assertj.core.groups.Tuple.tuple(2L, "http://localhost:9000/lebane-images/departamentos/42/b.png", 1));
+    }
+
+    @Test
+    void listItemResolvesMainImageUrlOrNull() {
+        DepartamentoListadoRow row = new DepartamentoListadoRow(7L, "DEP-X", "Título", new BigDecimal("1"),
+                Moneda.USD, 2, 1, 1, new BigDecimal("40"), EstadoDepartamento.DISPONIBLE, "CABA", "CABA",
+                Instant.parse("2026-10-01T12:00:00Z"));
+
+        var conFoto = mapper.toListItem(row, new DepartamentoAgregados(3, "departamentos/7/p.jpg", 9));
+        var sinFoto = mapper.toListItem(row, null);
+
+        assertThat(conFoto.imagenPrincipalUrl())
+                .isEqualTo("http://localhost:9000/lebane-images/departamentos/7/p.jpg");
+        assertThat(conFoto.cantidadImagenes()).isEqualTo(3);
+        assertThat(conFoto.cantidadConsultas()).isEqualTo(9);
+        assertThat(sinFoto.imagenPrincipalUrl()).isNull();
+        assertThat(sinFoto.cantidadImagenes()).isZero();
+        assertThat(sinFoto.cantidadConsultas()).isZero();
+    }
+
+    @Test
+    void filtroCollapsesRepeatedStates() {
+        var params = new DepartamentoListadoParams(null, null,
+                List.of(EstadoDepartamento.VENDIDO, EstadoDepartamento.VENDIDO), null, null, null, null, null, null,
+                null, null, null, null, null, null);
+        var sinEstados = new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
+
+        assertThat(mapper.toFiltro(params).estados()).containsExactly(EstadoDepartamento.VENDIDO);
+        assertThat(mapper.toFiltro(sinEstados).estados()).isEmpty();
     }
 }

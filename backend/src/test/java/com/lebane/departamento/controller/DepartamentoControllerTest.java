@@ -1,9 +1,11 @@
 package com.lebane.departamento.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -25,7 +27,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -38,11 +44,14 @@ import com.lebane.config.SecurityConfig;
 import com.lebane.departamento.TestFixtures;
 import com.lebane.departamento.dto.ConsultaCreatedResponse;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
+import com.lebane.departamento.dto.DepartamentoListItemResponse;
+import com.lebane.departamento.dto.DepartamentoListadoParams;
 import com.lebane.departamento.dto.DireccionResponse;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Moneda;
 import com.lebane.departamento.service.ConsultaService;
+import com.lebane.departamento.service.DepartamentoListadoService;
 import com.lebane.departamento.service.DepartamentoService;
 import com.lebane.exception.BusinessRuleException;
 import com.lebane.exception.ErrorCode;
@@ -64,6 +73,8 @@ class DepartamentoControllerTest {
 
     @MockitoBean
     private DepartamentoService departamentoService;
+    @MockitoBean
+    private DepartamentoListadoService listadoService;
     @MockitoBean
     private ConsultaService consultaService;
 
@@ -117,6 +128,80 @@ class DepartamentoControllerTest {
                 .andExpect(jsonPath("$.id").value(9))
                 .andExpect(jsonPath("$.departamentoId").value(15))
                 .andExpect(content().string(not(containsString("example.com"))));
+    }
+
+    @Test
+    void listarReturnsSpringDataPageShape() throws Exception {
+        DepartamentoListItemResponse item = new DepartamentoListItemResponse(15L, "DEP-ABCDEFGH", "3 ambientes",
+                new BigDecimal("185000.00"), Moneda.USD, 3, 2, 1, new BigDecimal("72.50"),
+                EstadoDepartamento.DISPONIBLE, "CABA", "CABA", "http://localhost:9000/b/a.jpg", 2, 4,
+                Instant.parse("2026-10-01T12:00:00Z"));
+        when(listadoService.listar(any())).thenReturn(
+                new PagedModel<>(new PageImpl<>(List.of(item), PageRequest.of(1, 1), 3)));
+
+        mockMvc.perform(get(BASE).param("estado", "DISPONIBLE,RESERVADO").param("page", "1").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(15))
+                .andExpect(jsonPath("$.content[0].imagenPrincipalUrl").value("http://localhost:9000/b/a.jpg"))
+                .andExpect(jsonPath("$.content[0].cantidadImagenes").value(2))
+                .andExpect(jsonPath("$.content[0].cantidadConsultas").value(4))
+                .andExpect(jsonPath("$.content[0].descripcion").doesNotExist())
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(1))
+                .andExpect(jsonPath("$.page.totalElements").value(3))
+                .andExpect(jsonPath("$.page.totalPages").value(3));
+    }
+
+    @Test
+    void listarBindsAndNormalizesQueryParams() throws Exception {
+        when(listadoService.listar(any())).thenReturn(new PagedModel<>(new PageImpl<>(List.of())));
+
+        mockMvc.perform(get(BASE).param("q", "  balcón ").param("ciudad", "Rosario")
+                        .param("estado", "DISPONIBLE").param("estado", "RESERVADO")
+                        .param("moneda", "USD").param("precioMin", "100000").param("precioMax", "200000")
+                        .param("conImagenes", "true").param("sort", "precio,desc"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<DepartamentoListadoParams> params = ArgumentCaptor.forClass(DepartamentoListadoParams.class);
+        verify(listadoService).listar(params.capture());
+        assertThat(params.getValue().q()).isEqualTo("balcón");
+        assertThat(params.getValue().estado())
+                .containsExactly(EstadoDepartamento.DISPONIBLE, EstadoDepartamento.RESERVADO);
+        assertThat(params.getValue().conImagenes()).isTrue();
+        assertThat(params.getValue().sort()).isEqualTo("precio,desc");
+    }
+
+    /**
+     * Errores de conversión (enum o número inválido): el record no llega a construirse, por lo que se informan solo
+     * esos campos, con un mensaje genérico (nunca el texto técnico de Spring con nombres de clases).
+     */
+    @Test
+    void listarRejectsUnconvertibleParamsWithoutTechnicalDetails() throws Exception {
+        mockMvc.perform(get(BASE).param("estado", "ALQUILADO").param("precioMin", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.estado").value("tiene un formato o valor inválido"))
+                .andExpect(jsonPath("$.fieldErrors.precioMin").value("tiene un formato o valor inválido"))
+                .andExpect(content().string(not(containsString("java."))))
+                .andExpect(content().string(not(containsString("Failed to convert"))));
+        verifyNoInteractions(listadoService);
+    }
+
+    @Test
+    void listarRejectsOutOfRangeParams() throws Exception {
+        mockMvc.perform(get(BASE).param("size", "500").param("sort", "titulo").param("q", "ab"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.size").exists())
+                .andExpect(jsonPath("$.fieldErrors.sort").exists())
+                .andExpect(jsonPath("$.fieldErrors.q").exists());
+        verifyNoInteractions(listadoService);
+    }
+
+    @Test
+    void listarRequiresMonedaForPriceFilter() throws Exception {
+        mockMvc.perform(get(BASE).param("precioMax", "100000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.moneda").value("es obligatoria para filtrar por precio"));
     }
 
     // ---------- Validación ----------
