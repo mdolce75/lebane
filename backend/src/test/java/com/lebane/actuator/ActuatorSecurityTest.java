@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -19,8 +20,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Exposición segura de Actuator (no requiere Docker: usa el perfil "nodb").
+ *
+ * <p>{@code @AutoConfigureObservability}: Spring Boot desactiva los exporters de métricas en tests; sin él no
+ * existe el registry de Prometheus y {@code /actuator/prometheus} respondería 404.
  */
 @SpringBootTest
+@AutoConfigureObservability(tracing = false)
 @AutoConfigureMockMvc
 @ActiveProfiles("nodb")
 class ActuatorSecurityTest {

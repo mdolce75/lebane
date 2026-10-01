@@ -22,6 +22,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
         <janino.version>3.1.12</janino.version>
+        <!-- 1.21.3 (gestionada por Boot 3.5.7) no es compatible con Docker Engine 29+ (API mínima 1.44). -->
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>

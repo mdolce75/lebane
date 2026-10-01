@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -21,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * health, liveness y readiness responden 200 UP, sin exponer detalles.
  */
 @Testcontainers
+@AutoConfigureObservability(tracing = false)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "lebane.security.actuator.username=probe",
         "lebane.security.actuator.password=probe-secret"
@@ -38,7 +40,13 @@ class ActuatorEndpointsIT {
 
     @Test
     void healthIsUpWithoutDetails() throws Exception {
-        assertUp("/actuator/health");
+        // La raíz lista los nombres de los grupos (liveness/readiness): no es información sensible.
+        ResponseEntity<String> response = rest.getForEntity("/actuator/health", String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = mapper.readTree(response.getBody());
+        assertThat(body.path("status").asText()).isEqualTo("UP");
+        assertThat(body.has("components")).isFalse();
+        assertThat(body.has("details")).isFalse();
     }
 
     @Test
