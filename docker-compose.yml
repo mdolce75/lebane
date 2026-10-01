@@ -76,19 +76,30 @@ services:
       DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-3000}
       # Datos de ejemplo idempotentes (false por defecto)
       SEED_ENABLED: ${SEED_ENABLED:-false}
-      # Storage (URL pública de imágenes; subida a MinIO desde la Fase 4)
+      # Storage de imágenes (MinIO)
       STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:9000}
       STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-lebane-images}
       STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
-      # Proveedor de direcciones (Fase 4)
+      STORAGE_CREATE_BUCKET: ${STORAGE_CREATE_BUCKET:-true}
+      STORAGE_TIMEOUT: ${STORAGE_TIMEOUT:-10s}
+      UPLOAD_MAX_FILE_SIZE: ${UPLOAD_MAX_FILE_SIZE:-5MB}
+      UPLOAD_MAX_REQUEST_SIZE: ${UPLOAD_MAX_REQUEST_SIZE:-6MB}
+      # Proveedor de direcciones: stub (local) | external (API Georef)
       ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-stub}
-      ADDRESS_PROVIDER_URL: ${ADDRESS_PROVIDER_URL:-}
+      ADDRESS_PROVIDER_URL: ${ADDRESS_PROVIDER_URL:-https://apis.datos.gob.ar/georef/api}
       ADDRESS_PROVIDER_API_KEY: ${ADDRESS_PROVIDER_API_KEY:-}
       ADDRESS_PROVIDER_TIMEOUT_MS: ${ADDRESS_PROVIDER_TIMEOUT_MS:-2000}
       ADDRESS_PROVIDER_MAX_RESULTS: ${ADDRESS_PROVIDER_MAX_RESULTS:-5}
+      # Resilience4j (defaults en application.yml)
+      R4J_CB_WINDOW_SIZE: ${R4J_CB_WINDOW_SIZE:-20}
+      R4J_CB_MIN_CALLS: ${R4J_CB_MIN_CALLS:-5}
+      R4J_CB_FAILURE_RATE: ${R4J_CB_FAILURE_RATE:-50}
+      R4J_CB_WAIT_OPEN: ${R4J_CB_WAIT_OPEN:-30s}
+      R4J_RETRY_MAX_ATTEMPTS: ${R4J_RETRY_MAX_ATTEMPTS:-3}
+      R4J_RETRY_WAIT: ${R4J_RETRY_WAIT:-200ms}
       # CORS / Actuator / tracing
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       ACTUATOR_USERNAME: ${ACTUATOR_USERNAME:-actuator}

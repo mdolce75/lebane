@@ -28,6 +28,9 @@ public interface DepartamentoRepository extends JpaRepository<Departamento, Long
     /** Usa el índice único de {@code codigo}. */
     boolean existsByCodigo(String codigo);
 
+    @Query("select d.id from Departamento d where d.codigo = :codigo")
+    Optional<Long> findIdByCodigo(@Param("codigo") String codigo);
+
     /**
      * Bloquea la fila del departamento ({@code SELECT ... FOR UPDATE}) hasta el fin de la transacción. Serializa las
      * altas de fotos de un mismo departamento para que el límite de 5 se respete con subidas concurrentes, sin
