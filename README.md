@@ -4,11 +4,12 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fases 1 a 3 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
+> **Estado:** Fases 1 a 4 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
 > logging JSON, correlation ID, Docker Compose y perfil ELK. Fase 2: modelo de datos, migraciones Flyway, API de
 > alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Fase 3: listado
 > paginado con Specifications y Criteria API, agregados en PostgreSQL, índices y validación sin full scans ni N+1
-> con 100k departamentos. Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
+> con 100k departamentos. Fase 4: fotos en MinIO, autocompletado de direcciones (stub / API Georef) y Resilience4j
+> con métricas y logs. Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -26,6 +27,9 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 - [Seed de datos](#seed-de-datos)
 - [Listado: paginación, filtros y orden](#listado-paginación-filtros-y-orden)
 - [Validación de performance](#validación-de-performance)
+- [Imágenes y MinIO](#imágenes-y-minio)
+- [Autocompletado de direcciones](#autocompletado-de-direcciones)
+- [Resiliencia (Resilience4j)](#resiliencia-resilience4j)
 - [Actuator, liveness y readiness](#actuator-liveness-y-readiness)
 - [Logging estructurado](#logging-estructurado)
 - [Correlation ID](#correlation-id)
@@ -64,9 +68,9 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 │       ├── config          Seguridad, CORS, auditoría JPA, propiedades
 │       ├── departamento    controller · dto (+ validation) · entity · mapper · repository · service
 │       │                   repository: Specifications + fragmento Criteria/SQL del listado
-│       ├── address         client · dto · provider · service                          (Fase 4)
-│       ├── storage         config · service: URL pública de imágenes; subida a MinIO en Fase 4
-│       ├── resilience      Configuración y eventos de Resilience4j                    (Fase 4)
+│       ├── address         client (Georef) · controller · dto · provider (Stub/External) · service
+│       ├── storage         client (MinIO) · config · service (resiliencia, métricas, logs, URLs)
+│       ├── resilience      ResilientExecutor (Retry+CircuitBreaker+TimeLimiter) y logs de eventos
 │       ├── logging         filter (X-Request-Id + access log) · interceptor (propagación saliente)
 │       ├── exception       ApiError, ErrorCode, GlobalExceptionHandler, ApiErrorController (/error)
 │       └── seed            Seed idempotente (SEED_ENABLED)
@@ -131,10 +135,17 @@ Toda la configuración proviene de variables de entorno. `cp .env.example .env` 
 | `DB_CONNECTION_TIMEOUT_MS` | `3000` | Timeout corto para que readiness no se cuelgue. |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | — (requeridas) | Credenciales de MinIO. |
 | `STORAGE_PUBLIC_URL` / `STORAGE_BUCKET` | `http://localhost:9000` / `lebane-images` | URL pública con la que el navegador accede a las imágenes. |
-| `STORAGE_*` (resto) | ver `.env.example` | Endpoint interno y credenciales de MinIO (Fase 4). |
+| `STORAGE_ENDPOINT` | `http://minio:9000` | URL interna backend → MinIO. |
+| `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` | — (en Docker: `MINIO_ROOT_*`) | Credenciales de MinIO; nunca se registran. |
+| `STORAGE_REGION` / `STORAGE_CREATE_BUCKET` | `us-east-1` / `true` | Región; crear el bucket con lectura pública si no existe. |
+| `STORAGE_TIMEOUT` / `STORAGE_CONNECT_TIMEOUT` | `10s` / `2s` | Tiempo máximo por operación (TimeLimiter) y de conexión. |
+| `UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE` | `5MB` / `6MB` | Tamaño máximo por foto y por request (una foto por request). |
 | `SEED_ENABLED` | `false` (`.env.example`: `true`) | Carga datos de ejemplo idempotentes al arrancar. |
 | `FLYWAY_ENABLED` | `true` | Aplica las migraciones al arrancar. |
-| `ADDRESS_PROVIDER*` | `stub` | Proveedor de autocomplete de direcciones (Fase 4). |
+| `ADDRESS_PROVIDER` | `stub` | `stub` (catálogo local, sin red) o `external` (API Georef). |
+| `ADDRESS_PROVIDER_URL` / `ADDRESS_PROVIDER_API_KEY` | `https://apis.datos.gob.ar/georef/api` / — | Proveedor externo; la API key (opcional) va como `Authorization: Bearer` y nunca se registra. |
+| `ADDRESS_PROVIDER_TIMEOUT_MS` / `ADDRESS_PROVIDER_MAX_RESULTS` | `2000` / `5` | Timeout por intento y máximo de sugerencias. |
+| `R4J_CB_*`, `R4J_RETRY_*`, `ADDRESS_RETRY_MAX_ATTEMPTS` | ver `.env.example` | Ventana, umbral y espera del circuit breaker; reintentos y backoff. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Orígenes permitidos (coma). En Docker se usa proxy (mismo origen). |
 | `ACTUATOR_USERNAME` / `ACTUATOR_PASSWORD` | `actuator` / — (requerida en Docker) | HTTP Basic para `/actuator/metrics` y `/actuator/prometheus`. |
 | `TRACING_SAMPLING_PROBABILITY` | `0.1` | Muestreo de trazas (traceId/spanId siempre se generan para logs). |
@@ -160,7 +171,7 @@ docker compose ps             # esperar a que backend y frontend estén "healthy
 |---|---|---|
 | Frontend | http://localhost:3000 | nginx; hace proxy de `/api` y `/actuator/health*` al backend |
 | Backend | http://localhost:8080 | API + Actuator |
-| MinIO API | http://localhost:9000 | URLs públicas de imágenes (Fase 4) |
+| MinIO API | http://localhost:9000 | URLs públicas de imágenes (bucket `lebane-images`, lectura anónima) |
 | MinIO consola | http://127.0.0.1:9001 | Solo localhost |
 | PostgreSQL | 127.0.0.1:5432 | Solo localhost |
 
@@ -222,8 +233,9 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 | `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas) | `200` + `ETag` · `400` · `404` |
 | `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional | `200` + `ETag` · `400` · `404` · `409` · `412` |
 | `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido) |
-| `POST`/`DELETE` | `/api/v1/departamentos/{id}/imagenes` | Subida y eliminación de fotos | Fase 4 |
-| `GET` | `/api/v1/direcciones/autocompletar` | Autocomplete de direcciones | Fase 4 |
+| `POST` | `/api/v1/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
+| `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` |
+| `GET` | `/api/v1/direcciones/autocompletar?q=` | Autocompletado de direcciones ([detalle](#autocompletado-de-direcciones)) | `200` · `400` |
 
 **Alta / edición** (`DepartamentoRequest`):
 
@@ -323,6 +335,8 @@ Todas las respuestas de error (validación, dominio, Spring MVC, Spring Security
 | `CONFLICT` | 409 | Violación de una restricción de la base (sin exponer SQL ni nombres de constraints) |
 | `CONCURRENT_MODIFICATION` | 409 | Conflicto de concurrencia optimista |
 | `DEPARTAMENTO_NO_DISPONIBLE` | 409 | Regla de negocio (consulta sobre un departamento vendido) |
+| `LIMITE_IMAGENES_ALCANZADO` | 409 | El departamento ya tiene 5 fotos |
+| `STORAGE_UNAVAILABLE` | 503 | MinIO caído, lento, con el circuito abierto o mal configurado (detalle técnico solo en logs) |
 | `PRECONDITION_FAILED` | 412 | `If-Match` desactualizado |
 | `PAYLOAD_TOO_LARGE` | 413 | Request mayor al límite |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | Content-Type distinto de JSON |
@@ -344,7 +358,9 @@ departamentos ficticios en distintas ciudades y estados, con consultas de ejempl
 - Cada departamento y sus consultas se insertan en una misma transacción.
 - Seguro con varias instancias arrancando a la vez: el `UNIQUE(codigo)` rechaza el duplicado y esa instancia lo
   omite.
-- No depende de servicios externos. Las fotos de ejemplo se agregan con la integración de MinIO (Fase 4).
+- No depende de servicios externos reales. Fotos: se generan en memoria (PNG sintéticos) y se suben con el mismo
+  servicio que la API (0 a 3 por departamento; los que no tienen muestran el placeholder). Solo a departamentos
+  `SEED-` sin fotos; si MinIO no está disponible se omiten (WARN) y se completan en el próximo arranque.
 - Los datos pasan las mismas validaciones que la API (`SeedDataTest`).
 
 ## Listado: paginación, filtros y orden
@@ -463,6 +479,123 @@ $P -d lebane_perf < backend/src/test/resources/perf/explain-listado.sql
 $P -d lebane -c "DROP DATABASE lebane_perf"
 ```
 
+## Imágenes y MinIO
+
+```bash
+# Subir (una foto por request; el tipo se detecta por el contenido, no por el nombre)
+curl -i -F "archivo=@casa.jpg" http://localhost:8080/api/v1/departamentos/1/imagenes
+# HTTP/1.1 201
+# {"id":19,"url":"http://localhost:9000/lebane-images/departamentos/1/80d7…png","contentType":"image/png",
+#  "sizeBytes":8600,"posicion":0}
+
+curl -i -X DELETE http://localhost:8080/api/v1/departamentos/1/imagenes/19      # 204
+```
+
+| Regla | Detalle |
+|---|---|
+| Formatos | JPEG, PNG, WebP, detectados por **magic bytes**. Un HTML renombrado a `.jpg` → `400 fieldErrors.archivo` |
+| Tamaño | `UPLOAD_MAX_FILE_SIZE` (5 MB): `413` |
+| Máximo | 5 fotos por departamento → `409 LIMITE_IMAGENES_ALCANZADO`. Lo garantiza la base (`posicion` 0..4 única), también con subidas concurrentes |
+| Principal | La de menor `posicion` (al subir se ocupa la primera libre) |
+| Claves | `departamentos/{id}/{uuid}.{ext}`, generadas por el backend: sin nombre del usuario (sin path traversal ni colisiones) |
+| URLs | Bucket con **lectura pública** de objetos (`s3:GetObject`); listar, escribir y borrar requieren credenciales. Las fotos de un aviso inmobiliario son públicas por naturaleza; si no lo fueran, `ImageUrlResolver` permite cambiar a URLs firmadas sin tocar el dominio |
+
+**Flujo de subida** (`ImagenService`):
+
+1. Validación barata antes de tocar la red: el departamento existe, tamaño, contenido real y prechequeo del
+   límite.
+2. Subida a MinIO **fuera de toda transacción**: no se mantiene una conexión ni un lock de base abiertos mientras
+   se transfiere un archivo por red.
+3. Registro en una transacción corta con la fila del departamento bloqueada (`SELECT … FOR UPDATE`): se vuelve a
+   verificar el límite y se asigna la posición.
+4. Si el registro falla (límite alcanzado por una subida concurrente, error de base), **borrado compensatorio** del
+   objeto. Si también falla, se registra en ERROR con su `objectKey` (objeto huérfano a limpiar).
+
+**Eliminación**: primero la fila (la foto desaparece de inmediato), después el objeto. Si MinIO falla en ese paso
+la respuesta sigue siendo `204` y se registra el objeto huérfano: nunca queda una referencia a una foto inexistente.
+
+**MinIO no está en el readiness**: listado, detalle, alta y edición no lo usan (el navegador descarga las fotos
+directo de MinIO). Si MinIO cae, solo fallan las subidas y bajas de fotos (`503 STORAGE_UNAVAILABLE`); la
+aplicación sigue atendiendo y no se reinicia. El bucket se prepara al arrancar en segundo plano o, si MinIO no
+estaba disponible, antes de la primera subida.
+
+**Logs de storage** (sin credenciales, URLs firmadas ni contenido): `Storage upload started` / `completed`
+(`bucket`, `objectKey`, `sizeBytes`, `contentType`, `durationMs`), `Storage operation failed` (WARN si es
+transitorio, ERROR si es de configuración), `Storage compensating delete executed` / `failed: orphan object`.
+
+## Autocompletado de direcciones
+
+```bash
+curl 'http://localhost:8080/api/v1/direcciones/autocompletar?q=Av%20Santa%20Fe%201860&limite=2'
+```
+
+```json
+{
+  "sugerencias": [
+    { "calle": "Av Santa Fe", "numero": "1860", "ciudad": "Ciudad Autónoma de Buenos Aires",
+      "provincia": "Ciudad Autónoma de Buenos Aires", "latitud": -34.5958, "longitud": -58.3941,
+      "placeId": "georef:…:1860", "descripcion": "AV SANTA FE 1860, Comuna 2, Ciudad Autónoma de Buenos Aires" }
+  ],
+  "proveedor": "georef",
+  "degradado": false
+}
+```
+
+- **Abstracción** `AddressProvider` con dos implementaciones, elegidas por `ADDRESS_PROVIDER`:
+  - `StubAddressProvider` (`stub`, default): catálogo local de calles argentinas, sin red, sin acentos ni
+    mayúsculas. Devuelve la altura tipeada y **no inventa coordenadas** (`null`). Para desarrollo y tests.
+  - `ExternalAddressProvider` (`external`): [API Georef](https://datosgobar.github.io/georef-ar-api/) del Estado
+    argentino (normalización de direcciones, gratuita, sin API key). Los tipos de Georef no salen de
+    `address.client`; otro proveedor es otra implementación de la interfaz.
+- **Fallback útil y honesto**: el autocompletado es una ayuda; el formulario admite cargar la dirección a mano. Si
+  el proveedor falla, tarda o el circuito está abierto, la respuesta es `200` con `degradado: true`, sin
+  sugerencias y con un `mensaje` para el usuario. **Nunca** se devuelven datos de otro origen como si fueran del
+  proveedor.
+- El cliente HTTP es el `RestClient` de Spring Boot: métrica `http_client_requests_seconds` y propagación de
+  `traceparent` automáticas, más `X-Request-Id`. Clasificación de errores: red, 5xx y 429 son transitorios (se
+  reintentan); 400 es "sin resultados"; 401/403 y respuestas inválidas son permanentes (ERROR en logs).
+
+## Resiliencia (Resilience4j)
+
+Cada integración externa tiene una instancia (`storage`, `address`) que combina, en este orden:
+
+```
+Retry ( CircuitBreaker ( TimeLimiter ( llamada ) ) )      ← ResilientExecutor
+```
+
+- **TimeLimiter**: cada intento tiene su timeout y al vencer se **cancela** (la llamada corre en un virtual thread
+  con el contexto del request: MDC y trace).
+- **CircuitBreaker**: cuenta cada intento. Con el circuito abierto, la llamada se rechaza sin tocar la red.
+- **Retry**: reintenta con backoff exponencial **solo fallos transitorios** (timeout, E/S, 5xx, throttling;
+  `TransientFailurePredicate`). Los permanentes (credenciales, 4xx) no se reintentan ni abren el circuito.
+- **Fallbacks** en quien llama, que conoce la semántica: storage → `503 STORAGE_UNAVAILABLE`; direcciones →
+  respuesta degradada.
+
+| Parámetro (default) | `storage` | `address` |
+|---|---|---|
+| Timeout por intento | `STORAGE_TIMEOUT` = 10 s | `ADDRESS_PROVIDER_TIMEOUT_MS` = 2 s |
+| Intentos | `R4J_RETRY_MAX_ATTEMPTS` = 3 | `ADDRESS_RETRY_MAX_ATTEMPTS` = 2 (interactivo) |
+| Backoff | 200 ms × 2 | 200 ms × 2 |
+| Circuito | ventana de 20 llamadas, mínimo 5, abre con 50 % de fallos, 30 s abierto, 2 de prueba en `HALF_OPEN` | ídem |
+
+**Eventos registrados** (logger `com.lebane.resilience`, JSON con `circuitBreaker`, `provider`, `requestId`,
+`traceId` y, según el caso, `fromState`, `toState`, `attempts`, `waitMs`, `timeoutMs`, `cause`, `durationMs`; nunca
+el mensaje de la excepción, que puede contener URLs o claves):
+
+| Evento | Nivel |
+|---|---|
+| `Circuit breaker opened: dependency degraded` | WARN |
+| `Call rejected: circuit breaker is open` | WARN |
+| `Retries exhausted` | WARN |
+| `Call timed out` | WARN |
+| `… fallback to manual entry` / `Storage operation failed` | WARN (ERROR si es permanente) |
+| `Retrying call`, `Call succeeded after retrying`, transición a `HALF_OPEN` | INFO |
+| `Circuit breaker closed: dependency recovered` | INFO |
+
+Verificado en Docker: con MinIO detenido, la primera subida agota los reintentos, la segunda abre el circuito y la
+tercera se rechaza en 30 ms; readiness, listado y detalle siguen en 200. Al volver MinIO, pasados 30 s, el circuito
+pasa a `HALF_OPEN` y se cierra con las primeras subidas exitosas.
+
 ## Actuator, liveness y readiness
 
 | Endpoint | Acceso | Respuesta |
@@ -484,8 +617,8 @@ explícito), `show-details: never`, `show-components: never`, `info.env.enabled=
   de PostgreSQL, MinIO, Logstash o del proveedor de direcciones **no** debe provocar un reinicio del contenedor.
 - **Readiness** (`readinessState` + `db`): ¿puede atender tráfico? Incluye solo dependencias críticas. Si
   PostgreSQL no responde → **503**. Logstash/Elasticsearch/Kibana y proveedores opcionales nunca afectan
-  readiness. *MinIO se evaluará para readiness en la Fase 4 (solo si se considera crítico para las operaciones
-  principales; la lectura del listado no lo requiere).*
+  readiness. **MinIO tampoco**: solo lo usan las subidas y bajas de fotos (ver [Imágenes y MinIO](#imágenes-y-minio)).
+  Los health indicators de los circuit breakers no se registran por el mismo motivo.
 
 ```bash
 curl -i http://localhost:8080/actuator/health/liveness
@@ -496,9 +629,20 @@ curl -u actuator:$ACTUATOR_PASSWORD http://localhost:8080/actuator/prometheus | 
 Para aislar Actuator en red interna se puede definir `MANAGEMENT_SERVER_PORT` (por ejemplo `8081`) y no
 publicarlo en el host (ajustar el healthcheck al nuevo puerto).
 
-Métricas disponibles en Fase 1: HTTP server (`http_server_requests_seconds`, con histogramas y SLOs), JVM, CPU,
-Hikari (`hikaricp_*`), Tomcat, logback (eventos por nivel). Tags comunes: `application`, `environment`.
-Resilience4j y storage se agregan en la Fase 4.
+Métricas: HTTP server (`http_server_requests_seconds`, con histogramas y SLOs), HTTP client
+(`http_client_requests_seconds`, llamadas al proveedor de direcciones), JVM, CPU, Hikari (`hikaricp_*`), Tomcat,
+logback (eventos por nivel) y, desde la Fase 4:
+
+| Métrica | Tags | Qué mide |
+|---|---|---|
+| `resilience4j_circuitbreaker_state` | `name`, `state` | Estado de cada circuito (1 = estado actual) |
+| `resilience4j_circuitbreaker_calls_seconds` / `_failure_rate` / `_not_permitted_calls_total` | `name`, `kind` | Llamadas, tasa de fallos y rechazos por circuito abierto |
+| `resilience4j_retry_calls_total` | `name`, `kind` | Éxitos y fallos con o sin reintento |
+| `resilience4j_timelimiter_calls_total` | `name`, `kind` | Llamadas exitosas, fallidas y por timeout |
+| `lebane_storage_operations_seconds` | `operation`, `outcome`, `provider` | Latencia y resultado de `upload`, `delete`, `compensatingDelete`, `ensureBucket` |
+| `lebane_address_autocomplete_seconds` | `provider`, `outcome` | Latencia y resultado (`success` / `fallback`) del autocompletado |
+
+Tags comunes: `application`, `environment`.
 
 ## Logging estructurado
 
@@ -526,7 +670,9 @@ Ejemplo de access log:
 
 Campos: `@timestamp`, `level`, `logger`, `thread`, `message`, `service`, `application`, `environment`,
 `requestId`, `traceId`, `spanId` (MDC) y campos estructurados por evento (`method`, `path`, `status`,
-`durationMs`, `remoteAddress`, `responseSize`; desde Fase 2/4: `errorCode`, `circuitBreaker`, `provider`, …).
+`durationMs`, `remoteAddress`, `responseSize`; según el evento: `errorCode`, `status`, `circuitBreaker`,
+`provider`, `fromState`, `toState`, `attempts`, `cause`, `fallback`, `bucket`, `objectKey`, `sizeBytes`,
+`contentType`, `departamentoId`, …).
 Las excepciones van en `exception` (stack trace acortado, causa raíz primero). Nunca se concatenan campos en el
 mensaje: se usan `StructuredArguments`.
 
@@ -608,6 +754,15 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |
 | `DepartamentoControllerTest` (listado) | formato `PagedModel`, binding de query params, errores de conversión sin detalles técnicos |
 | `ListadoIT` | filtros, orden, paginación, imagen principal y contadores calculados en PostgreSQL, escape de `%`/`_`, 3 sentencias por página |
+| `ResilientExecutorTest` | reintentos solo transitorios, timeout con cancelación, apertura y rechazo del circuito, propagación de MDC, logs de eventos con campos y sin mensajes de excepción |
+| `ObjectStorageServiceTest`, `ImageTypeTest` | bucket idempotente, reintento reabriendo el stream, 503 sin detalles, compensación que nunca lanza, métricas; detección por magic bytes |
+| `ImagenServiceTest` | validaciones antes de subir, primera posición libre, límite bajo lock con compensación, compensación ante error de base, orden de borrado |
+| `StubAddressProviderTest`, `ExternalAddressProviderTest` | catálogo local; cliente Georef real contra un servidor HTTP local: mapeo, `X-Request-Id`, 400/401/429/5xx, JSON inválido, timeout |
+| `AddressAutocompleteServiceTest` | fallback degradado (WARN/ERROR según el fallo), límite, circuito abierto sin llamar al proveedor, métricas |
+| `ImagenControllerTest`, `DireccionControllerTest` | contrato HTTP multipart y autocompletado, errores 400/409/413/503 sin detalles internos |
+| `StorageIT` | MinIO real: subida, lectura pública, detalle y listado, límite de 5, contenido no imagen, borrado, seed con fotos idempotente, logs sin credenciales |
+| `StorageOutageIT` | MinIO detenido: 503, circuito abierto, rechazo inmediato, readiness/listado/detalle siguen OK, logs de eventos |
+| `AddressResilienceIT` | proveedor externo caído → degradado → circuito abierto → rechazo sin red → recuperación `HALF_OPEN` → `CLOSED` |
 | `ListadoPerformanceIT` | 100k departamentos: sin *seq scans* (`pg_stat_user_tables`) y ≤ 3 sentencias en 11 escenarios, con control negativo |
 | Frontend `httpClient.test.ts` | X-Request-Id, JSON/FormData, normalización de errores sin detalles internos, timeout, red |
 | Frontend `App.test.tsx` | routing, indicador de readiness (UP / 503), 404, política de reintentos |
@@ -620,7 +775,16 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - **Seguridad**: la API de dominio es pública (el desafío no define usuarios); Spring Security se usa para proteger
   Actuator con HTTP Basic, stateless, sin CSRF (no hay cookies de sesión). Si falta `ACTUATOR_PASSWORD` se usa una
   contraseña aleatoria no registrada (metrics/prometheus quedan inaccesibles) — *fail-safe*.
-- **Readiness = readinessState + db**. MinIO se decidirá en la Fase 4.
+- **Readiness = readinessState + db**. MinIO y el proveedor de direcciones quedan fuera: no son necesarios para
+  atender la mayoría de las operaciones y su caída no debe sacar la instancia de servicio.
+- **MinIO SDK 8.5.x**: 8.6+ y 9.x usan OkHttp 5, que requiere Kotlin 2; Spring Boot 3.5 gestiona Kotlin 1.9, y
+  mezclarlos arriesga errores en ejecución.
+- **Resilience4j programático** (`ResilientExecutor`) en lugar de anotaciones: un solo lugar con el orden de los
+  decoradores, sin AOP, con propagación explícita del contexto (MDC y trace) al hilo del TimeLimiter y fallbacks
+  tipados en cada servicio.
+- **Una foto por request**: errores parciales manejables (el cliente sabe qué foto falló) y compensación simple.
+- **Fallback de direcciones = degradado, no stub**: devolver el catálogo local cuando falla Georef sería presentar
+  datos falsos como reales.
 - **Edición con `PUT` (reemplazo completo) + `ETag`/`If-Match`** en lugar de `PATCH`: el formulario de edición
   envía siempre el recurso completo y el ETag protege contra la pérdida de actualizaciones entre usuarios.
 - **`Location` relativo** en el alta: no depende del header `Host`, que detrás del proxy es el host interno.
@@ -671,7 +835,7 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | 1. Infraestructura y observabilidad inicial | **Completa y verificada** (build, 44 tests unitarios + 5 IT backend, 21 tests frontend, Docker Compose con y sin perfil `observability`) |
 | 2. Modelo, persistencia y errores | **Completa y verificada** (109 tests unitarios + 20 IT backend; stack Docker: Flyway, seed idempotente, API directa y vía proxy) |
 | 3. Specifications, Criteria y listado optimizado | **Completa y verificada** (131 tests unitarios + 34 IT backend; EXPLAIN ANALYZE con 100k departamentos; endpoint probado directo y vía proxy) |
-| 4. Storage, direcciones, resiliencia y métricas | Pendiente |
+| 4. Storage, direcciones, resiliencia y métricas | **Completa y verificada** (181 tests unitarios + 41 IT backend, con MinIO real; en Docker: seed con fotos, subida/lectura pública/borrado vía proxy, Georef real, caída y recuperación de MinIO con circuito abierto, métricas en Prometheus) |
 | 4.1 Logging y observabilidad (validación) | Pendiente |
 | 5. Frontend | Pendiente (scaffold, cliente HTTP y routing listos) |
 | 6. Tests completos | Pendiente |
@@ -685,8 +849,15 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
   appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos generados durante la
   caída se descartan (buffer en memoria, sin bloquear requests).
-- La subida de imágenes a MinIO, el autocomplete y Resilience4j llegan en la Fase 4. Mientras tanto, `imagenes` del
-  detalle e `imagenPrincipalUrl` del listado están vacíos salvo datos cargados a mano.
+- Objetos huérfanos: si falla el borrado compensatorio o el borrado en MinIO después de eliminar la fila, el objeto
+  queda en el bucket (registrado en ERROR/WARN con su `objectKey`, inaccesible desde la aplicación). Falta un job
+  de reconciliación periódico (listar objetos sin fila en `imagen`).
+- Las fotos se validan por firma binaria, no se decodifican ni se re-encodean: un archivo con firma PNG válida pero
+  contenido corrupto se acepta (el navegador mostrará el placeholder de imagen rota). No se generan miniaturas.
+- El estado de los circuit breakers es por instancia del backend (en memoria); con varias réplicas, cada una abre y
+  cierra su propio circuito.
+- Georef es un servicio público sin SLA y con límites de uso; para producción con tráfico alto convendría cache de
+  sugerencias o un proveedor con contrato.
 - Paginación por `OFFSET`, limitada a los primeros 10.000 resultados de cada búsqueda. Para recorridos completos
   (exportaciones, scroll infinito profundo) convendría paginación por cursor (*keyset*), fuera del alcance.
 - La búsqueda de texto distingue acentos (`balcon` no encuentra `balcón`) y solo busca en el título. Ignorar acentos

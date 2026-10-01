@@ -26,13 +26,16 @@ Flyway aplica las migraciones al arrancar.
 | `departamento.mapper` | Conversión DTO ↔ entidad y normalización de textos |
 | `departamento.repository` | Spring Data JPA + `JpaSpecificationExecutor`; `DepartamentoSpecifications` (filtros); fragmento `DepartamentoListadoRepository` (página proyectada con Criteria y agregados por página) |
 | `departamento.service` | Casos de uso transaccionales (alta, edición, detalle, listado, consultas) y generador de códigos |
-| `storage` | `ImageUrlResolver` (URL pública de imágenes); cliente MinIO en Fase 4 |
+| `storage.client` | `MinioStorageClient`: operaciones crudas y clasificación de errores transitorios/permanentes |
+| `storage.service` | `ObjectStorageService` (resiliencia, métricas, logs, bucket), `ImageType` (magic bytes), `ImageUrlResolver` |
+| `departamento.service.ImagenService` / `controller.ImagenController` | Subida y eliminación de fotos con compensación |
+| `address` | `AddressProvider` (`StubAddressProvider`, `ExternalAddressProvider` + `client.GeorefClient`), servicio con fallback y `DireccionController` |
+| `resilience` | `ResilientExecutor` (Retry + CircuitBreaker + TimeLimiter), `TransientFailurePredicate`, `ResilienceEventLogger` |
 | `logging` | `RequestContext` (correlation ID), `AvailabilityStateLogger`, `StructuredStatusListener` |
 | `logging.filter` | `RequestIdFilter`: X-Request-Id, MDC y access log estructurado |
 | `logging.interceptor` | `RequestIdPropagationInterceptor` para clientes HTTP salientes |
 | `exception` | `ApiError`, `ErrorCode`, excepciones de dominio, `GlobalExceptionHandler`, `ApiErrorController` |
-| `seed` | `DevDataSeeder` idempotente (`SEED_ENABLED`) |
-| `address`, `resilience` | Fase 4 |
+| `seed` | `DevDataSeeder` idempotente (`SEED_ENABLED`), con fotos sintéticas (`SeedImages`) |
 
 ## Recursos
 
