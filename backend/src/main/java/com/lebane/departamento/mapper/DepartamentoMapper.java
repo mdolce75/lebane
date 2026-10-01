@@ -3,11 +3,15 @@ package com.lebane.departamento.mapper;
 import static com.lebane.departamento.mapper.Textos.opcional;
 import static com.lebane.departamento.mapper.Textos.requerido;
 
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
+import com.lebane.departamento.dto.DepartamentoListItemResponse;
+import com.lebane.departamento.dto.DepartamentoListadoParams;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.dto.DireccionRequest;
 import com.lebane.departamento.dto.DireccionResponse;
@@ -16,6 +20,9 @@ import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.Direccion;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
+import com.lebane.departamento.repository.DepartamentoAgregados;
+import com.lebane.departamento.repository.DepartamentoFiltro;
+import com.lebane.departamento.repository.DepartamentoListadoRow;
 import com.lebane.storage.service.ImageUrlResolver;
 
 /** Conversión entre DTOs y entidades de departamento. Las entidades nunca salen de la capa de servicio. */
@@ -63,6 +70,26 @@ public class DepartamentoMapper {
                 departamento.getVersion(),
                 departamento.getCreatedAt(),
                 departamento.getUpdatedAt());
+    }
+
+    /** Una fila del listado con sus agregados (calculados en PostgreSQL; ceros si no tiene fotos ni consultas). */
+    public DepartamentoListItemResponse toListItem(DepartamentoListadoRow row, DepartamentoAgregados agregados) {
+        DepartamentoAgregados datos = agregados != null ? agregados : DepartamentoAgregados.VACIO;
+        String imagenPrincipalUrl = datos.imagenPrincipalKey() != null
+                ? imageUrlResolver.urlFor(datos.imagenPrincipalKey())
+                : null;
+        return new DepartamentoListItemResponse(row.id(), row.codigo(), row.titulo(), row.precio(), row.moneda(),
+                row.ambientes(), row.dormitorios(), row.banos(), row.superficieM2(), row.estado(), row.ciudad(),
+                row.provincia(), imagenPrincipalUrl, datos.cantidadImagenes(), datos.cantidadConsultas(),
+                row.createdAt());
+    }
+
+    /** Parámetros web (ya validados y normalizados) → criterios del repositorio. */
+    public DepartamentoFiltro toFiltro(DepartamentoListadoParams params) {
+        Set<EstadoDepartamento> estados = params.estado().isEmpty() ? Set.of() : EnumSet.copyOf(params.estado());
+        return new DepartamentoFiltro(params.q(), params.ciudad(), estados, params.moneda(), params.precioMin(),
+                params.precioMax(), params.ambientesMin(), params.dormitoriosMin(), params.banosMin(),
+                params.superficieMin(), params.superficieMax(), params.conImagenes());
     }
 
     public ImagenResponse toResponse(Imagen imagen) {

@@ -28,6 +28,7 @@ import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -75,11 +76,16 @@ public class GlobalExceptionHandler {
 
     // ---------- Validación y formato de entrada ----------
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ApiError> handleBodyValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
+    /**
+     * {@code @Valid} sobre un body JSON o sobre query params ({@code @ModelAttribute}). Los errores de conversión de
+     * query params (p. ej. un enum desconocido) traen un mensaje técnico de Spring con nombres de clases: se
+     * reemplaza por uno genérico.
+     */
+    @ExceptionHandler(BindException.class)
+    ResponseEntity<ApiError> handleBodyValidation(BindException ex, HttpServletRequest request) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            fieldErrors.putIfAbsent(error.getField(), error.getDefaultMessage());
+            fieldErrors.putIfAbsent(error.getField(), message(error));
         }
         ex.getBindingResult().getGlobalErrors()
                 .forEach(error -> fieldErrors.putIfAbsent(error.getObjectName(), error.getDefaultMessage()));
@@ -97,7 +103,7 @@ public class GlobalExceptionHandler {
         ex.getParameterValidationResults().forEach(result -> {
             if (result instanceof ParameterErrors errors) {
                 errors.getFieldErrors()
-                        .forEach(error -> fieldErrors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+                        .forEach(error -> fieldErrors.putIfAbsent(error.getField(), message(error)));
                 errors.getGlobalErrors()
                         .forEach(error -> fieldErrors.putIfAbsent(error.getObjectName(), error.getDefaultMessage()));
             } else {
@@ -267,6 +273,10 @@ public class GlobalExceptionHandler {
             log.debug("Client error", kv("errorCode", code), kv("status", status.value()),
                     kv("exception", ex.getClass().getSimpleName()));
         }
+    }
+
+    private static String message(FieldError error) {
+        return error.isBindingFailure() ? "tiene un formato o valor inválido" : error.getDefaultMessage();
     }
 
     private static String fieldPath(JsonMappingException ex) {

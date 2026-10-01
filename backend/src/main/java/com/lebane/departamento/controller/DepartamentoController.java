@@ -2,11 +2,13 @@ package com.lebane.departamento.controller;
 
 import java.net.URI;
 
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -19,15 +21,18 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lebane.departamento.dto.ConsultaCreatedResponse;
 import com.lebane.departamento.dto.ConsultaRequest;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
+import com.lebane.departamento.dto.DepartamentoListItemResponse;
+import com.lebane.departamento.dto.DepartamentoListadoParams;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.service.ConsultaService;
+import com.lebane.departamento.service.DepartamentoListadoService;
 import com.lebane.departamento.service.DepartamentoService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * API de departamentos (v1). El listado paginado con filtros se agrega en la Fase 3 y las imágenes en la Fase 4.
+ * API de departamentos (v1). Las imágenes se agregan en la Fase 4.
  */
 @RestController
 @RequestMapping(path = DepartamentoController.BASE_PATH, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -36,11 +41,23 @@ public class DepartamentoController {
     static final String BASE_PATH = "/api/v1/departamentos";
 
     private final DepartamentoService departamentoService;
+    private final DepartamentoListadoService listadoService;
     private final ConsultaService consultaService;
 
-    public DepartamentoController(DepartamentoService departamentoService, ConsultaService consultaService) {
+    public DepartamentoController(DepartamentoService departamentoService, DepartamentoListadoService listadoService,
+            ConsultaService consultaService) {
         this.departamentoService = departamentoService;
+        this.listadoService = listadoService;
         this.consultaService = consultaService;
+    }
+
+    /**
+     * Listado paginado con filtros y orden, resuelto en PostgreSQL. Respuesta en el formato estándar de Spring Data
+     * ({@code content} + {@code page: {size, number, totalElements, totalPages}}).
+     */
+    @GetMapping
+    public PagedModel<DepartamentoListItemResponse> listar(@Valid @ModelAttribute DepartamentoListadoParams params) {
+        return listadoService.listar(params);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
