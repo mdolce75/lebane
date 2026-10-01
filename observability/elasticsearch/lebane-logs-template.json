@@ -24,7 +24,7 @@
       "properties": {
         "@timestamp": { "type": "date" },
         "@version": { "type": "keyword" },
-        "message": { "type": "text" },
+        "message": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 512 } } },
         "exception": { "type": "text" },
         "level": { "type": "keyword" },
         "logger": { "type": "keyword" },

@@ -4,12 +4,13 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fases 1 a 4 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
+> **Estado:** Fases 1 a 4.1 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
 > logging JSON, correlation ID, Docker Compose y perfil ELK. Fase 2: modelo de datos, migraciones Flyway, API de
 > alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Fase 3: listado
 > paginado con Specifications y Criteria API, agregados en PostgreSQL, índices y validación sin full scans ni N+1
 > con 100k departamentos. Fase 4: fotos en MinIO, autocompletado de direcciones (stub / API Georef) y Resilience4j
-> con métricas y logs. Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
+> con métricas y logs. Fase 4.1: validación de logging y observabilidad (ELK con plantilla, retención y data view
+> automáticos; correlación requestId/traceId de punta a punta). Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -153,6 +154,7 @@ Toda la configuración proviene de variables de entorno. `cp .env.example .env` 
 | `LOG_FORMAT` | `json` | `json` (producción/Docker) o `text` (desarrollo). |
 | `LOG_SERVICE_NAME` / `LOG_ENVIRONMENT` | `lebane-backend` / `local` | Campos `service` / `environment` en cada log. |
 | `LOGSTASH_ENABLED` / `LOGSTASH_HOST` / `LOGSTASH_PORT` | `false` / `logstash` / `5000` | Envío opcional a Logstash. |
+| `LOGS_RETENTION_DAYS` | `7` | Retención de los índices de logs en Elasticsearch (ILM). |
 | `VITE_API_BASE_URL` | `/api` | Base de la API vista por el navegador (build time, no secretos). |
 | `BACKEND_UPSTREAM` | `http://backend:8080` | Upstream de nginx (red interna Docker). |
 | `NGINX_RESOLVER` | `127.0.0.11` | DNS que usa nginx para re-resolver el upstream (DNS embebido de Docker). |
@@ -204,22 +206,53 @@ En Windows (PowerShell): `$env:DB_PASSWORD="..."` en lugar de `export`.
 ## Perfil de observabilidad
 
 ```bash
-# En .env: LOGSTASH_ENABLED=true (opcional: sin esto ELK levanta pero no recibe logs)
+# En .env: LOGSTASH_ENABLED=true (sin esto ELK levanta pero no recibe logs)
 docker compose --profile observability up -d --build
 ```
 
 | Servicio | URL | Credenciales |
 |---|---|---|
 | Elasticsearch | http://127.0.0.1:9200 | `elastic` / `ELASTIC_PASSWORD` |
-| Kibana | http://127.0.0.1:5601 | `elastic` / `ELASTIC_PASSWORD` |
+| Kibana | http://127.0.0.1:5601 → *Discover* → data view **Lebane logs** | `elastic` / `ELASTIC_PASSWORD` |
 | Logstash TCP | 127.0.0.1:5000 | entrada `json_lines` |
 
-- `elasticsearch-setup` es un contenedor efímero que fija la contraseña de `kibana_system`.
-- Índices: `lebane-logs-YYYY.MM.dd`. En Kibana crear un *data view* `lebane-logs-*` con campo de tiempo `@timestamp`.
+Configuración automática e idempotente (contenedores efímeros, scripts versionados en `observability/`):
+
+| Servicio | Qué hace |
+|---|---|
+| `elasticsearch-setup` | Contraseña de `kibana_system`; política ILM **`lebane-logs`** (borra índices con más de `LOGS_RETENTION_DAYS` días, default 7); plantilla de índice **`lebane-logs`** |
+| `kibana-setup` | Data view **Lebane logs** (`lebane-logs-*`, tiempo `@timestamp`) |
+
+La plantilla define el mapeo de los índices diarios `lebane-logs-YYYY.MM.dd`: identificadores y dimensiones como
+`keyword` (`requestId`, `traceId`, `level`, `logger`, `circuitBreaker`, `provider`, `errorCode`, …), números
+(`status`, `durationMs`, `attempts`, `sizeBytes`, …), `message` como texto con subcampo `message.keyword` para
+agrupar por evento, y `index.mapping.ignore_malformed`: un valor con tipo inesperado se ignora en lugar de que
+Elasticsearch **rechace el evento completo** (con mapeo dinámico, un campo que llegara primero como número y luego
+como texto haría perder logs).
+
+Consultas útiles en Kibana (KQL):
+
+| Necesidad | Consulta |
+|---|---|
+| Todo lo que pasó en un request (el `requestId` que ve el usuario en el error) | `requestId : "f707a231f5cb3c0ad906aa679ce9720b"` |
+| Un flujo distribuido | `traceId : "6abecdf6…"` |
+| Degradaciones de una dependencia | `circuitBreaker : "storage" and level : "WARN"` |
+| Aperturas de circuito | `message.keyword : "Circuit breaker opened: dependency degraded"` |
+| Errores 5xx | `logger : "com.lebane.access" and status >= 500` |
+| Requests lentos | `logger : "com.lebane.access" and durationMs > 1000` |
+| Fallbacks de direcciones | `fallback : true` |
+| Objetos huérfanos a limpiar | `message : "orphan" or message : "huérfano"` (campo `objectKey`) |
+
 - Volúmenes persistentes: `elasticsearch-data`, `logstash-data`, `kibana-data`.
-- El backend **no depende** de estos servicios: no están en `depends_on` ni en readiness. Si Logstash cae, el
-  appender asíncrono descarta eventos (nunca bloquea requests) y reintenta conectar cada 10 s; stdout sigue
-  recibiendo todos los logs.
+- El backend **no depende** de estos servicios: no están en `depends_on` ni en readiness. Con Logstash caído, el
+  appender asíncrono descarta eventos (nunca bloquea requests: 20.000 eventos en < 3 s sin destino, probado),
+  reintenta conectar cada 10 s, avisa una vez con un evento JSON (`Logback internal status`) y, al apagar, espera
+  como máximo 5 s para vaciar su buffer (el default de la librería es 1 minuto). stdout siempre recibe todo.
+- Con `LOGSTASH_ENABLED=false` el appender TCP **no se crea**: ninguna conexión ni evento hacia Logstash, aunque
+  esté levantado.
+- **Recolección y rotación**: la salida principal es stdout (JSON por línea), lista para cualquier recolector
+  (Docker, Kubernetes, Fluent Bit, Filebeat). En Docker Compose cada servicio usa el driver `json-file` con
+  rotación (`max-size: 10m`, `max-file: 5`). En Elasticsearch, la retención la aplica la política ILM.
 
 ## Endpoints
 
@@ -664,7 +697,7 @@ Ejemplo de access log:
  "logger":"com.lebane.access","thread":"tomcat-handler-3","level":"INFO",
  "requestId":"3f0c…","traceId":"6512…","spanId":"9a1b…",
  "method":"GET","path":"/api/v1/departamentos","status":200,"durationMs":12,
- "remoteAddress":"172.18.0.5","responseSize":2048,
+ "remoteAddress":"172.18.0.5","responseSize":null,
  "service":"lebane-backend","application":"lebane-backend","environment":"local"}
 ```
 
@@ -674,7 +707,9 @@ Campos: `@timestamp`, `level`, `logger`, `thread`, `message`, `service`, `applic
 `provider`, `fromState`, `toState`, `attempts`, `cause`, `fallback`, `bucket`, `objectKey`, `sizeBytes`,
 `contentType`, `departamentoId`, …).
 Las excepciones van en `exception` (stack trace acortado, causa raíz primero). Nunca se concatenan campos en el
-mensaje: se usan `StructuredArguments`.
+mensaje: se usan `StructuredArguments`. `responseSize` es el `Content-Length` cuando la respuesta lo tiene; las
+respuestas JSON se envían *chunked* y lo dejan en `null` (medirlas exigiría envolver y contar toda la salida). Los
+avisos internos de Logback llegan como eventos con `logbackOrigin` y `cause`.
 
 Niveles: `ERROR` fallos inesperados · `WARN` degradación (CB abierto, fallback, timeout, 5xx) · `INFO` ciclo de
 vida/negocio y access log · `DEBUG` detalle técnico (incluye probes de health y scraping de Prometheus).
@@ -688,8 +723,11 @@ Spring Security):
 2. Lo devuelve en el header de respuesta, lo coloca en el MDC (`requestId`) y como atributo del request.
 3. Escribe el access log al finalizar y **siempre** limpia el MDC.
 
-`traceId`/`spanId` los aporta Micrometer Tracing (Brave, propagación W3C `traceparent`), sin exporter.
-`RequestIdPropagationInterceptor` propaga `X-Request-Id` a llamadas HTTP salientes. El frontend genera un
+`traceId`/`spanId` los aporta Micrometer Tracing (Brave, propagación W3C `traceparent`), sin exporter: están en
+todos los logs de un request (también con muestreo en 0,1, porque el contexto existe aunque el span no se exporte).
+Un `traceparent` entrante se **continúa** (mismo `traceId`, span nuevo). Hacia afuera, las llamadas al proveedor de
+direcciones llevan `X-Request-Id` (`RequestIdPropagationInterceptor`) y `traceparent` con el mismo `traceId`,
+aunque se ejecuten en el virtual thread del TimeLimiter (el `ResilientExecutor` propaga MDC y contexto de traza). El frontend genera un
 `X-Request-Id` por request y nginx lo reenvía (o genera uno si falta). Los errores mostrados al usuario incluyen
 el requestId como "código de seguimiento".
 
@@ -763,6 +801,9 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | `StorageIT` | MinIO real: subida, lectura pública, detalle y listado, límite de 5, contenido no imagen, borrado, seed con fotos idempotente, logs sin credenciales |
 | `StorageOutageIT` | MinIO detenido: 503, circuito abierto, rechazo inmediato, readiness/listado/detalle siguen OK, logs de eventos |
 | `AddressResilienceIT` | proveedor externo caído → degradado → circuito abierto → rechazo sin red → recuperación `HALF_OPEN` → `CLOSED` |
+| `LogstashAppenderTest` | appender de producción contra un servidor TCP local: JSON con campos comunes, MDC y argumentos, sin propiedades internas, secretos enmascarados; con Logstash caído no bloquea (20.000 eventos) y el apagado no espera más de 5 s |
+| `TraceCorrelationTest` | con tracing activo: `requestId`, `traceId` y `spanId` en el access log, `traceparent` entrante continuado, `exception`/`errorCode`/`status` como campos, sin appender de Logstash cuando está deshabilitado |
+| `AddressResilienceIT` (correlación) | el proveedor externo recibe `X-Request-Id` y `traceparent` con el mismo `traceId` del request |
 | `ListadoPerformanceIT` | 100k departamentos: sin *seq scans* (`pg_stat_user_tables`) y ≤ 3 sentencias en 11 escenarios, con control negativo |
 | Frontend `httpClient.test.ts` | X-Request-Id, JSON/FormData, normalización de errores sin detalles internos, timeout, red |
 | Frontend `App.test.tsx` | routing, indicador de readiness (UP / 503), 404, política de reintentos |
@@ -782,6 +823,10 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - **Resilience4j programático** (`ResilientExecutor`) en lugar de anotaciones: un solo lugar con el orden de los
   decoradores, sin AOP, con propagación explícita del contexto (MDC y trace) al hilo del TimeLimiter y fallbacks
   tipados en cada servicio.
+- **Plantilla de índice explícita + `ignore_malformed`** en Elasticsearch en lugar del mapeo dinámico: filtros
+  exactos sobre `keyword` y ningún evento rechazado por un tipo inesperado.
+- **`shutdownGracePeriod` de 5 s** en el appender de Logstash: el default (1 minuto) demoraba el apagado con
+  Logstash caído; lo detectó `LogstashAppenderTest`.
 - **Una foto por request**: errores parciales manejables (el cliente sabe qué foto falló) y compensación simple.
 - **Fallback de direcciones = degradado, no stub**: devolver el catálogo local cuando falla Georef sería presentar
   datos falsos como reales.
@@ -836,7 +881,7 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | 2. Modelo, persistencia y errores | **Completa y verificada** (109 tests unitarios + 20 IT backend; stack Docker: Flyway, seed idempotente, API directa y vía proxy) |
 | 3. Specifications, Criteria y listado optimizado | **Completa y verificada** (131 tests unitarios + 34 IT backend; EXPLAIN ANALYZE con 100k departamentos; endpoint probado directo y vía proxy) |
 | 4. Storage, direcciones, resiliencia y métricas | **Completa y verificada** (181 tests unitarios + 41 IT backend, con MinIO real; en Docker: seed con fotos, subida/lectura pública/borrado vía proxy, Georef real, caída y recuperación de MinIO con circuito abierto, métricas en Prometheus) |
-| 4.1 Logging y observabilidad (validación) | Pendiente |
+| 4.1 Logging y observabilidad (validación) | **Completa y verificada** (187 tests unitarios + 41 IT backend; en Docker: ELK con plantilla, ILM y data view automáticos, búsqueda por `requestId`/`traceId`/campos de resiliencia, ID generado por nginx, Logstash habilitado y deshabilitado, sin secretos indexados) |
 | 5. Frontend | Pendiente (scaffold, cliente HTTP y routing listos) |
 | 6. Tests completos | Pendiente |
 | 7. Validación final | Pendiente |
