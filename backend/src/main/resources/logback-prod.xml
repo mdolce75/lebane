@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  JSON estructurado a stdout (Docker / producción).
+  Campos: @timestamp, level, logger, thread, message, service, application, environment,
+  MDC (requestId, traceId, spanId) y argumentos estructurados (method, path, status, durationMs, ...).
+  Incluido desde logback-spring.xml cuando LOG_FORMAT != text.
+-->
+<included>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${LOG_CUSTOM_FIELDS}</customFields>
+            <fieldNames>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <stackTrace>exception</stackTrace>
+                <levelValue>[ignore]</levelValue>
+                <version>[ignore]</version>
+            </fieldNames>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>8192</maxLength>
+                <shortenedClassNameLength>30</shortenedClassNameLength>
+                <rootCauseFirst>true</rootCauseFirst>
+                <exclude>^sun\.reflect\..*</exclude>
+                <exclude>^java\.lang\.reflect\..*</exclude>
+                <exclude>^jdk\.internal\..*</exclude>
+            </throwableConverter>
+            <!-- Defensa en profundidad: enmascara secretos aunque se logueen por error. -->
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <defaultMask>****</defaultMask>
+                <paths>password,passwd,secret,secretKey,secret_key,accessKey,access_key,token,accessToken,access_token,refreshToken,apiKey,api_key,authorization,Authorization,cookie,Cookie,set-cookie,Set-Cookie</paths>
+                <valueMask>
+                    <value>(?i)(X-Amz-(?:Signature|Credential|Security-Token)=)[^\x26\s"]+</value>
+                    <mask>$1****</mask>
+                </valueMask>
+                <valueMask>
+                    <value>(?i)(Bearer\s+)[A-Za-z0-9\-._~+/]+=*</value>
+                    <mask>$1****</mask>
+                </valueMask>
+                <valueMask>
+                    <value>(?i)((?:password|secret|secretKey|accessKey|token|api[_-]?key)\s*[=:]\s*)[^\s,;\x26"]+</value>
+                    <mask>$1****</mask>
+                </valueMask>
+            </jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <root>
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</included>

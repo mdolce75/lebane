@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Configuración de logging de Lebane.
+
+  - LOG_FORMAT=json  (default): JSON estructurado a stdout (logback-prod.xml).
+  - LOG_FORMAT=text           : texto legible para desarrollo local (logback-dev.xml).
+  - LOGSTASH_ENABLED=true     : además envía JSON a Logstash por TCP, de forma asíncrona y no bloqueante.
+
+  Los valores se leen del Environment de Spring (application.yml -> variables de entorno).
+-->
+<configuration scan="false">
+    <!-- Sin listener de estado en consola: los fallos de conexión a Logstash no inundan stdout. -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
+    <springProperty scope="context" name="LOG_FORMAT" source="lebane.logging.format" defaultValue="json"/>
+    <springProperty scope="context" name="LOG_SERVICE_NAME" source="lebane.logging.service-name" defaultValue="lebane-backend"/>
+    <springProperty scope="context" name="LOG_APPLICATION" source="spring.application.name" defaultValue="lebane-backend"/>
+    <springProperty scope="context" name="LOG_ENVIRONMENT" source="lebane.logging.environment" defaultValue="local"/>
+    <springProperty scope="context" name="LOGSTASH_ENABLED" source="lebane.logging.logstash.enabled" defaultValue="false"/>
+    <springProperty scope="context" name="LOGSTASH_HOST" source="lebane.logging.logstash.host" defaultValue="logstash"/>
+    <springProperty scope="context" name="LOGSTASH_PORT" source="lebane.logging.logstash.port" defaultValue="5000"/>
+
+    <!-- Campos comunes a todos los eventos JSON -->
+    <property name="LOG_CUSTOM_FIELDS"
+              value="{&quot;service&quot;:&quot;${LOG_SERVICE_NAME}&quot;,&quot;application&quot;:&quot;${LOG_APPLICATION}&quot;,&quot;environment&quot;:&quot;${LOG_ENVIRONMENT}&quot;}"/>
+
+    <if condition='"text".equalsIgnoreCase(property("LOG_FORMAT"))'>
+        <then>
+            <include resource="logback-dev.xml"/>
+        </then>
+        <else>
+            <include resource="logback-prod.xml"/>
+        </else>
+    </if>
+
+    <if condition='"true".equalsIgnoreCase(property("LOGSTASH_ENABLED"))'>
+        <then>
+            <include resource="logback-logstash.xml"/>
+        </then>
+    </if>
+
+    <!-- Los appenders se asocian a root dentro de cada archivo incluido. Nivel efectivo: logging.level.root -->
+    <root level="INFO"/>
+</configuration>

@@ -1,0 +1,262 @@
+# Lebane - stack local.
+#   docker compose up -d --build                              -> postgres, minio, backend, frontend
+#   docker compose --profile observability up -d --build      -> + elasticsearch, logstash, kibana
+# Toda la configuración proviene de .env (ver .env.example). No hay credenciales hardcodeadas.
+
+name: ${COMPOSE_PROJECT_NAME:-lebane}
+
+x-logging: &default-logging
+  # Rotación de logs de contenedores (stdout JSON del backend incluido).
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB es requerido}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER es requerido}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es requerido}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER es requerido}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD es requerido}
+    ports:
+      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./backend
+    image: lebane-backend:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SERVER_PORT: 8080
+      FORWARD_HEADERS_STRATEGY: ${FORWARD_HEADERS_STRATEGY:-none}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError}
+      # Base de datos (derivada de las variables de PostgreSQL para evitar inconsistencias)
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-2}
+      DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-3000}
+      # Storage (se usa desde la Fase 4)
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:9000}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-lebane-images}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      # Proveedor de direcciones (Fase 4)
+      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-stub}
+      ADDRESS_PROVIDER_URL: ${ADDRESS_PROVIDER_URL:-}
+      ADDRESS_PROVIDER_API_KEY: ${ADDRESS_PROVIDER_API_KEY:-}
+      ADDRESS_PROVIDER_TIMEOUT_MS: ${ADDRESS_PROVIDER_TIMEOUT_MS:-2000}
+      ADDRESS_PROVIDER_MAX_RESULTS: ${ADDRESS_PROVIDER_MAX_RESULTS:-5}
+      # CORS / Actuator / tracing
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      ACTUATOR_USERNAME: ${ACTUATOR_USERNAME:-actuator}
+      ACTUATOR_PASSWORD: ${ACTUATOR_PASSWORD:?ACTUATOR_PASSWORD es requerido}
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+      # Logging (JSON a stdout por defecto; Logstash opcional y no bloqueante)
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_SERVICE_NAME: ${LOG_SERVICE_NAME:-lebane-backend}
+      LOG_ENVIRONMENT: ${LOG_ENVIRONMENT:-local}
+      LOGSTASH_ENABLED: ${LOGSTASH_ENABLED:-false}
+      LOGSTASH_HOST: ${LOGSTASH_HOST:-logstash}
+      LOGSTASH_PORT: ${LOGSTASH_PORT:-5000}
+    ports:
+      - "${BACKEND_HOST_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/actuator/health/readiness"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    image: lebane-frontend:local
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-http://backend:8080}
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+
+  # ------------------------------------------------------------------
+  # Perfil opcional de observabilidad: docker compose --profile observability up
+  # El backend NO depende de estos servicios (ni para arrancar ni para readiness).
+  # Requiere ELASTIC_PASSWORD, KIBANA_SYSTEM_PASSWORD y KIBANA_ENCRYPTION_KEY en .env (no se validan con
+  # ':?' porque Compose interpola todo el archivo aun sin el perfil activo).
+  # Para enviar logs: LOGSTASH_ENABLED=true en .env.
+  # ------------------------------------------------------------------
+  elasticsearch:
+    profiles: ["observability"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.19.4}
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms512m -Xmx512m}
+    ports:
+      - "127.0.0.1:${ELASTICSEARCH_HOST_PORT:-9200}:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s -u \"elastic:$${ELASTIC_PASSWORD}\" http://localhost:9200/_cluster/health | grep -Eq '\"status\":\"(green|yellow)\"'"
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
+    logging: *default-logging
+
+  # Configura la contraseña del usuario interno kibana_system (una sola vez, idempotente).
+  elasticsearch-setup:
+    profiles: ["observability"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.19.4}
+    restart: "no"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        until curl -s -o /dev/null -w '%{http_code}' -u "elastic:$${ELASTIC_PASSWORD}"
+        -X POST -H 'Content-Type: application/json'
+        http://elasticsearch:9200/_security/user/kibana_system/_password
+        -d "{\"password\":\"$${KIBANA_SYSTEM_PASSWORD}\"}" | grep -q '^200$$';
+        do echo 'Esperando a Elasticsearch...'; sleep 5; done;
+        echo 'kibana_system configurado'
+    logging: *default-logging
+
+  logstash:
+    profiles: ["observability"]
+    image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION:-8.19.4}
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      LS_JAVA_OPTS: ${LS_JAVA_OPTS:--Xms256m -Xmx256m}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      XPACK_MONITORING_ENABLED: "false"
+      CONFIG_RELOAD_AUTOMATIC: "false"
+    ports:
+      - "127.0.0.1:${LOGSTASH_TCP_HOST_PORT:-5000}:5000"
+    volumes:
+      - ./observability/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - logstash-data:/usr/share/logstash/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9600/ > /dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    logging: *default-logging
+
+  kibana:
+    profiles: ["observability"]
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION:-8.19.4}
+    restart: unless-stopped
+    depends_on:
+      elasticsearch-setup:
+        condition: service_completed_successfully
+    environment:
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_SYSTEM_PASSWORD}
+      XPACK_SECURITY_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY:-}
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY}
+      XPACK_REPORTING_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY}
+      TELEMETRY_OPTIN: "false"
+    ports:
+      - "127.0.0.1:${KIBANA_HOST_PORT:-5601}:5601"
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:5601/api/status | grep -Eq '^(200|401)$'"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    logging: *default-logging
+
+volumes:
+  postgres-data:
+  minio-data:
+  elasticsearch-data:
+  logstash-data:
+  kibana-data:
