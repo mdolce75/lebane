@@ -125,7 +125,9 @@ if (-not $SkipBackend -and $mvn) {
 # ---------- 2. Frontend ----------
 if (-not $SkipFrontend -and $node) {
     $fe = Join-Path $root 'frontend'
-    if (Invoke-Step 'frontend-npm-install' 'npm install --no-audit --no-fund' $fe) {
+    # npm ci: instala exactamente el lockfile y nunca lo modifica (npm install lo reescribe).
+    $npmInstall = if (Test-Path (Join-Path $fe 'package-lock.json')) { 'npm ci --no-audit --no-fund' } else { 'npm install --no-audit --no-fund' }
+    if (Invoke-Step 'frontend-npm-install' $npmInstall $fe) {
         Invoke-Step 'frontend-typecheck' 'npm run typecheck' $fe | Out-Null
         Invoke-Step 'frontend-lint' 'npm run lint' $fe | Out-Null
         Invoke-Step 'frontend-test' 'npm test' $fe | Out-Null
