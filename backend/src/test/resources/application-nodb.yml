@@ -1,6 +1,8 @@
 # Perfil de test sin base de datos disponible (no requiere Docker).
 # Simula PostgreSQL caído: la app debe iniciar, liveness UP y readiness DOWN (503).
 spring:
+  flyway:
+    enabled: false
   datasource:
     url: jdbc:postgresql://127.0.0.1:1/lebane
     username: lebane

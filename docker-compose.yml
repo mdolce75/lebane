@@ -74,7 +74,9 @@ services:
       DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
       DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-2}
       DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-3000}
-      # Storage (se usa desde la Fase 4)
+      # Datos de ejemplo idempotentes (false por defecto)
+      SEED_ENABLED: ${SEED_ENABLED:-false}
+      # Storage (URL pública de imágenes; subida a MinIO desde la Fase 4)
       STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:9000}
       STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}

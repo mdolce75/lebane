@@ -21,10 +21,14 @@ spring:
       # Timeout corto: el health de readiness no debe colgarse si PostgreSQL no responde.
       connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
       validation-timeout: 2000
+  flyway:
+    # Migraciones versionadas en db/migration. Se aplican al arrancar, antes de que Hibernate valide el esquema.
+    enabled: ${FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
   jpa:
     open-in-view: false
     hibernate:
-      # El esquema lo gestionan migraciones versionadas (Fase 2). Hibernate solo valida.
+      # El esquema lo gestiona Flyway. Hibernate solo valida que las entidades coincidan con las tablas.
       ddl-auto: validate
     properties:
       hibernate:
@@ -34,6 +38,10 @@ spring:
         query:
           fail_on_pagination_over_collection_fetch: true
           in_clause_parameter_padding: true
+  web:
+    # Mensajes de Bean Validation en español, independientes del Accept-Language y del locale del contenedor.
+    locale: es
+    locale-resolver: fixed
   servlet:
     multipart:
       max-file-size: ${UPLOAD_MAX_FILE_SIZE:5MB}
@@ -63,6 +71,13 @@ lebane:
       password: ${ACTUATOR_PASSWORD:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  storage:
+    # URL pública con la que el navegador accede a las imágenes (bucket con lectura pública).
+    public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000}
+    bucket: ${STORAGE_BUCKET:lebane-images}
+  seed:
+    # Datos de ejemplo idempotentes. Deshabilitado por defecto; .env.example lo habilita para desarrollo local.
+    enabled: ${SEED_ENABLED:false}
   logging:
     # Leídos por logback-spring.xml mediante <springProperty>.
     format: ${LOG_FORMAT:json}

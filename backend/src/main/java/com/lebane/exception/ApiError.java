@@ -19,6 +19,11 @@ public record ApiError(
         Map<String, String> fieldErrors) {
 
     public static ApiError of(int status, ErrorCode code, String message, String path, String requestId) {
-        return new ApiError(Instant.now(), status, code.name(), message, path, requestId, Map.of());
+        return of(status, code, message, path, requestId, Map.of());
+    }
+
+    public static ApiError of(int status, ErrorCode code, String message, String path, String requestId,
+            Map<String, String> fieldErrors) {
+        return new ApiError(Instant.now(), status, code.name(), message, path, requestId, Map.copyOf(fieldErrors));
     }
 }
