@@ -283,6 +283,15 @@ el requestId como "código de seguimiento".
 
 ## Tests
 
+Verificación completa de la Fase 1 en Windows (backend, frontend, Docker Compose, probes 200/503, logs JSON y
+perfil de observabilidad), con un log por paso y un resumen en `verificacion\resumen.txt`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verificar-fase1.ps1
+```
+
+Paso a paso:
+
 ```bash
 # Backend: unitarios (*Test, no requieren Docker)
 cd backend && mvn test

@@ -59,3 +59,6 @@ backups/
 
 # ---- Volúmenes locales de Docker (si se usan bind mounts) ----
 .data/
+
+# ---- Salida del script de verificación ----
+verificacion/
