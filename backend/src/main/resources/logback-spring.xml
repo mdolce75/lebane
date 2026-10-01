@@ -9,8 +9,9 @@
   Los valores se leen del Environment de Spring (application.yml -> variables de entorno).
 -->
 <configuration scan="false">
-    <!-- Sin listener de estado en consola: los fallos de conexión a Logstash no inundan stdout. -->
-    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+    <!-- Reemplaza el listener de consola que registra Spring Boot (texto plano + stack trace) por eventos JSON,
+         limitados a uno por origen por minuto: una caída de Logstash no inunda stdout ni rompe el formato. -->
+    <statusListener class="com.lebane.logging.StructuredStatusListener"/>
 
     <springProperty scope="context" name="LOG_FORMAT" source="lebane.logging.format" defaultValue="json"/>
     <springProperty scope="context" name="LOG_SERVICE_NAME" source="lebane.logging.service-name" defaultValue="lebane-backend"/>
@@ -35,6 +36,11 @@
     -->
     <include resource="logback-format-${LOG_FORMAT}.xml"/>
     <include optional="true" resource="logback-logstash-${LOGSTASH_ENABLED}.xml"/>
+
+    <!-- Estados internos de Logback (StructuredStatusListener): solo a stdout, nunca a Logstash (evita bucles). -->
+    <logger name="com.lebane.logging.logback" level="WARN" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
 
     <!-- Los appenders se asocian a root dentro de cada archivo incluido. Nivel efectivo: logging.level.root -->
     <root level="INFO"/>
