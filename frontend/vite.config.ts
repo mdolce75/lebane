@@ -19,6 +19,17 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: false,
       target: 'es2022',
+      rollupOptions: {
+        output: {
+          // Librerías en chunks propios: cambian poco, así que quedan en la caché del navegador entre despliegues.
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            router: ['react-router'],
+            query: ['@tanstack/react-query'],
+            forms: ['react-hook-form', '@hookform/resolvers', 'zod'],
+          },
+        },
+      },
     },
     test: {
       environment: 'jsdom',
