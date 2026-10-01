@@ -12,24 +12,34 @@ docker build -t lebane-backend:local .
 ```
 
 Variables mínimas para `spring-boot:run`: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `ACTUATOR_PASSWORD`.
-Para logs legibles en consola: `LOG_FORMAT=text`.
+Para logs legibles en consola: `LOG_FORMAT=text`. Para datos de ejemplo: `SEED_ENABLED=true`.
+Flyway aplica las migraciones al arrancar.
 
 ## Paquetes
 
 | Paquete | Responsabilidad |
 |---|---|
-| `config` | Seguridad (Actuator con HTTP Basic), CORS, `@ConfigurationProperties` |
-| `logging` | `RequestContext` (correlation ID), `AvailabilityStateLogger` |
+| `config` | Seguridad (Actuator con HTTP Basic), CORS, auditoría JPA, `@ConfigurationProperties` |
+| `departamento.controller` | `DepartamentoController` (`/api/v1/departamentos`), ETags |
+| `departamento.dto` | Requests/responses (records) y validaciones entre campos (`dto.validation`) |
+| `departamento.entity` | `Departamento` (+ `Direccion` embebida), `Imagen`, `Consulta`; relaciones LAZY, sin colecciones |
+| `departamento.mapper` | Conversión DTO ↔ entidad y normalización de textos |
+| `departamento.repository` | Spring Data JPA; consultas dedicadas para imágenes y `COUNT` de consultas |
+| `departamento.service` | Casos de uso transaccionales y generador de códigos |
+| `storage` | `ImageUrlResolver` (URL pública de imágenes); cliente MinIO en Fase 4 |
+| `logging` | `RequestContext` (correlation ID), `AvailabilityStateLogger`, `StructuredStatusListener` |
 | `logging.filter` | `RequestIdFilter`: X-Request-Id, MDC y access log estructurado |
 | `logging.interceptor` | `RequestIdPropagationInterceptor` para clientes HTTP salientes |
-| `exception` | `ApiError` (contrato de error) y `ErrorCode` |
-| `departamento`, `address`, `storage`, `resilience`, `seed` | Fases 2–4 |
+| `exception` | `ApiError`, `ErrorCode`, excepciones de dominio, `GlobalExceptionHandler`, `ApiErrorController` |
+| `seed` | `DevDataSeeder` idempotente (`SEED_ENABLED`) |
+| `address`, `resilience` | Fase 4 |
 
 ## Recursos
 
 | Archivo | Contenido |
 |---|---|
-| `application.yml` | Configuración por variables de entorno, Actuator, health groups, métricas, tracing |
+| `application.yml` | Configuración por variables de entorno, Flyway, Actuator, health groups, métricas, tracing |
+| `db/migration/V*.sql` | Migraciones Flyway (esquema, constraints e índices) |
 | `logback-spring.xml` | Selección de salida según `LOG_FORMAT` / `LOGSTASH_ENABLED` |
 | `logback-format-json.xml` | JSON a stdout con enmascarado de secretos (`LOG_FORMAT=json`) |
 | `logback-format-text.xml` | Texto legible con requestId/traceId (`LOG_FORMAT=text`) |

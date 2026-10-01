@@ -24,6 +24,6 @@ npm run build        # dist/
 | `src/shared/components` | Componentes reutilizables (`ErrorMessage`, `Spinner`) |
 | `src/features/system` | Indicador de disponibilidad del backend (readiness) |
 | `src/pages` | Páginas; el listado/alta/detalle/edición de departamentos llega en la Fase 5 |
-| `nginx/` | Configuración de nginx para la imagen Docker (SPA + proxy a la API) |
+| `nginx/` | Configuración de nginx para la imagen Docker (SPA + proxy a la API; re-resuelve el upstream por DNS con `NGINX_RESOLVER`) |
 
 Las variables `VITE_*` se embeben en el bundle: nunca deben contener secretos.
