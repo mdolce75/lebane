@@ -6,6 +6,7 @@
   - Los hilos de request nunca esperan la red: si el buffer se llena, los eventos se descartan (appendTimeout=0).
   - Si Logstash está caído, reintenta conectar cada reconnectionDelay sin bloquear ni loguear errores en stdout.
   - stdout (CONSOLE) se mantiene siempre como salida segura.
+  - Al apagar, el envío pendiente se corta a los 5 s (shutdownGracePeriod): Logstash caído no demora el shutdown.
 -->
 <included>
     <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
@@ -16,6 +17,9 @@
         <writeTimeout>5 seconds</writeTimeout>
         <ringBufferSize>8192</ringBufferSize>
         <appendTimeout>0</appendTimeout>
+        <!-- Al apagar, espera como máximo 5 s a vaciar el buffer (default: 1 minuto). Con Logstash caído, el default
+             demoraría el apagado de la aplicación más allá del período de gracia del orquestador. -->
+        <shutdownGracePeriod>5 seconds</shutdownGracePeriod>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <!-- Sin propiedades del contexto de Logback (LOGSTASH_HOST, LOG_FORMAT, ...): filtrarían configuración
                  interna en cada evento. Los campos comunes se agregan explícitamente en customFields. -->

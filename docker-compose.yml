@@ -192,7 +192,8 @@ services:
       start_period: 40s
     logging: *default-logging
 
-  # Configura la contraseña del usuario interno kibana_system (una sola vez, idempotente).
+  # Configuración inicial idempotente: contraseña de kibana_system, política de retención (ILM) y plantilla de
+  # índice con mapeo explícito. Ver observability/elasticsearch/setup.sh.
   elasticsearch-setup:
     profiles: ["observability"]
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.19.4}
@@ -203,16 +204,10 @@ services:
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
-    entrypoint:
-      - /bin/sh
-      - -c
-      - >
-        until curl -s -o /dev/null -w '%{http_code}' -u "elastic:$${ELASTIC_PASSWORD}"
-        -X POST -H 'Content-Type: application/json'
-        http://elasticsearch:9200/_security/user/kibana_system/_password
-        -d "{\"password\":\"$${KIBANA_SYSTEM_PASSWORD}\"}" | grep -q '^200$$';
-        do echo 'Esperando a Elasticsearch...'; sleep 5; done;
-        echo 'kibana_system configurado'
+      LOGS_RETENTION_DAYS: ${LOGS_RETENTION_DAYS:-7}
+    volumes:
+      - ./observability/elasticsearch:/setup:ro
+    entrypoint: ["/bin/sh", "/setup/setup.sh"]
     logging: *default-logging
 
   logstash:
@@ -265,6 +260,21 @@ services:
       timeout: 10s
       retries: 30
       start_period: 60s
+    logging: *default-logging
+
+  # Crea el data view "Lebane logs" (lebane-logs-*) en Kibana. Ver observability/kibana/setup.sh.
+  kibana-setup:
+    profiles: ["observability"]
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION:-8.19.4}
+    restart: "no"
+    depends_on:
+      kibana:
+        condition: service_healthy
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./observability/kibana/setup.sh:/setup/setup.sh:ro
+    entrypoint: ["/bin/sh", "/setup/setup.sh"]
     logging: *default-logging
 
 volumes:

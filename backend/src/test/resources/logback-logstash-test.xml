@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Solo para LogstashAppenderTest: incluye el appender de producción tal cual. Las propiedades (LOGSTASH_HOST,
+     LOGSTASH_PORT, LOG_CUSTOM_FIELDS) las define el test en el LoggerContext. -->
+<configuration>
+    <include resource="logback-logstash-true.xml"/>
+</configuration>
