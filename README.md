@@ -4,10 +4,10 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fase 1 implementada (infraestructura, Actuator, health probes, logging JSON, correlation ID,
-> seguridad de Actuator, Docker Compose, scaffold del frontend). Ver [Estado por fase](#estado-por-fase) y
-> [Limitaciones conocidas](#limitaciones-conocidas): **la Fase 1 todavía no fue compilada ni testeada** porque el
-> entorno donde se escribió no tenía acceso a Maven Central, npm ni Docker Hub.
+> **Estado:** Fase 1 implementada **y verificada** (infraestructura, Actuator, health probes, logging JSON,
+> correlation ID, seguridad de Actuator, Docker Compose, perfil ELK, scaffold del frontend): compilación, tests
+> unitarios y de integración (Testcontainers), stack Docker con y sin el perfil de observabilidad. Ver
+> [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -139,7 +139,7 @@ docker compose up -d postgres minio
 cd backend
 export DB_URL=jdbc:postgresql://localhost:5432/lebane DB_USERNAME=lebane DB_PASSWORD=<tu-password>
 export ACTUATOR_PASSWORD=<algo> LOG_FORMAT=text
-mvn spring-boot:run
+./mvnw spring-boot:run
 
 # Frontend (otra terminal) — vite redirige /api y /actuator/health a localhost:8080
 cd frontend
@@ -297,9 +297,9 @@ Paso a paso:
 
 ```bash
 # Backend: unitarios (*Test, no requieren Docker)
-cd backend && mvn test
+cd backend && ./mvnw test
 # Backend: unitarios + integración (*IT, Testcontainers: requiere Docker)
-cd backend && mvn verify
+cd backend && ./mvnw verify
 
 # Frontend
 cd frontend && npm install && npm run typecheck && npm run lint && npm test && npm run build
@@ -313,7 +313,9 @@ Tests de la Fase 1:
 | `RequestIdPropagationInterceptorTest` | propagación del requestId a llamadas salientes |
 | `ProbesWithoutDatabaseTest` | PostgreSQL caído ⇒ liveness 200 UP, readiness **503**, health sin detalles |
 | `ActuatorSecurityTest` | health/info públicos, metrics/prometheus 401 sin credenciales y 200 con ellas, endpoints sensibles 404, error JSON con requestId |
-| `JsonLoggingTest` | cada línea es JSON válido, campos del access log, requestId, enmascarado de secretos |
+| `JsonLoggingTest` | cada línea es JSON válido, campos del access log, requestId, enmascarado de secretos, sin propiedades internas de Logback, configuración sin warnings |
+| `StructuredStatusListenerTest` | estados internos de Logback (p. ej. Logstash caído) reemitidos como JSON, sin stack trace, con rate limit por origen |
+| `LoggingPropertiesTest` | `LOG_FORMAT` / `LOGSTASH_ENABLED` inválidos impiden el arranque |
 | `ActuatorEndpointsIT` | con PostgreSQL real (Testcontainers): health/liveness/readiness 200 `{"status":"UP"}`, métricas Hikari/HTTP |
 | Frontend `httpClient.test.ts` | X-Request-Id, JSON/FormData, normalización de errores sin detalles internos, timeout, red |
 | Frontend `App.test.tsx` | routing, indicador de readiness (UP / 503), 404, política de reintentos |
@@ -322,25 +324,38 @@ Tests de la Fase 1:
 ## Decisiones técnicas
 
 - **Spring Boot 3.5.x + Java 21**, virtual threads habilitados (`spring.threads.virtual.enabled`).
-- **Maven** (sin wrapper commiteado: el entorno de generación no tenía acceso a Maven Central; ver limitaciones).
+- **Maven Wrapper** (`backend/mvnw`, Maven 3.9.11, la misma línea que la imagen de build de Docker): no requiere Maven instalado.
 - **Seguridad**: la API de dominio es pública (el desafío no define usuarios); Spring Security se usa para proteger
   Actuator con HTTP Basic, stateless, sin CSRF (no hay cookies de sesión). Si falta `ACTUATOR_PASSWORD` se usa una
   contraseña aleatoria no registrada (metrics/prometheus quedan inaccesibles) — *fail-safe*.
 - **Readiness = readinessState + db**. MinIO se decidirá en la Fase 4.
 - **Hikari `connection-timeout` 3 s** para que el probe de readiness responda dentro del timeout del healthcheck (5 s).
 - **Logstash** vía `LogstashTcpSocketAppender` (ring buffer asíncrono, `appendTimeout=0` ⇒ descarta en vez de
-  bloquear). `NopStatusListener` evita que los errores de reconexión inunden stdout.
+  bloquear). Spring Boot registra un listener que imprime en stdout, como texto plano con stack trace, los avisos
+  internos de Logback (p. ej. cada reconexión fallida). `StructuredStatusListener` lo reemplaza: reemite esos
+  avisos como eventos JSON (`logger=com.lebane.logging.logback`, campos `logbackOrigin` y `cause`), uno por origen
+  por minuto y solo a stdout. Así, una caída de Logstash queda visible sin romper el formato ni inundar los logs.
+- **Logs 100 % JSON**: además de lo anterior, la JVM recibe sus opciones por `JAVA_OPTS` y no por
+  `JAVA_TOOL_OPTIONS`, que imprime "Picked up …" en texto; los encoders usan `includeContext=false` para no
+  filtrar propiedades internas (`LOGSTASH_HOST`, …).
 - **Esquema de BD**: `ddl-auto=validate`; las migraciones versionadas se agregan en la Fase 2.
 - **open-in-view deshabilitado**, `fail_on_pagination_over_collection_fetch=true` (previene paginación en memoria).
 - **Frontend en Docker** servido por nginx unprivileged con proxy a la API ⇒ mismo origen, sin CORS.
-- **MinIO**: imagen fijada a un release concreto porque MinIO dejó de publicar imágenes community nuevas a fines de
-  2025; configurable con `MINIO_IMAGE`.
+- **MinIO**: las imágenes oficiales (`minio/minio` en Docker Hub y `quay.io/minio/minio`) ya no se pueden
+  descargar públicamente. Se usa `cgr.dev/chainguard/minio`, construida por Chainguard desde el código oficial de
+  MinIO, que incluye `mc` para el healthcheck. Está **fijada por digest** porque el tier gratuito solo publica
+  `latest`. Es configurable con `MINIO_IMAGE`; para actualizarla, `docker pull cgr.dev/chainguard/minio:latest` y
+  copiar el nuevo digest.
+- **Testcontainers 1.21.4** (sobrescribe la 1.21.3 de Boot 3.5.7): la anterior no es compatible con Docker
+  Engine 29+, que exige API ≥ 1.44.
+- **Healthcheck del frontend contra `127.0.0.1`**: dentro del contenedor `localhost` resuelve primero a `::1` y
+  nginx escucha solo en IPv4.
 
 ## Estado por fase
 
 | Fase | Estado |
 |---|---|
-| 1. Infraestructura y observabilidad inicial | Implementada. **Pendiente: compilar y ejecutar tests** (ver limitaciones) |
+| 1. Infraestructura y observabilidad inicial | **Completa y verificada** (build, 44 tests unitarios + 5 IT backend, 21 tests frontend, Docker Compose con y sin perfil `observability`) |
 | 2. Modelo, persistencia y errores | Pendiente |
 | 3. Specifications, Criteria y listado optimizado | Pendiente |
 | 4. Storage, direcciones, resiliencia y métricas | Pendiente |
@@ -351,13 +366,12 @@ Tests de la Fase 1:
 
 ## Limitaciones conocidas
 
-- **Fase 1 no compilada ni testeada todavía.** El entorno donde se generó no tenía acceso a Maven Central, al
-  registro de npm ni a Docker Hub. Se validó offline: sintaxis de todos los `.java` (parser de javac), sintaxis de
-  todos los `.ts/.tsx` (compilador de TypeScript), XML/YAML/JSON bien formados y `docker compose config` (con y sin
-  perfil). Ejecutar los comandos de [Tests](#tests) y [Docker Compose](#ejecución-con-docker-compose) antes de
-  continuar con la Fase 2.
-- Versiones de dependencias fijadas sin poder consultar los repositorios: Spring Boot `3.5.7`, Logstash Logback
-  Encoder `8.1`, Elastic `8.19.4`; rangos `^` en npm. Si alguna no resolviera, subir al último
-  patch disponible.
-- No hay `package-lock.json` ni Maven Wrapper: generarlos con `npm install` y `mvn wrapper:wrapper` y commitearlos.
+- `/actuator/health` (raíz) incluye `"groups":["liveness","readiness"]`: es el comportamiento estándar de Spring
+  Boot con grupos de health y solo expone nombres, no detalles. Liveness y readiness devuelven exactamente
+  `{"status":"UP"}`.
+- Las respuestas 404 de rutas inexistentes todavía usan el formato de error por defecto de Spring (sin
+  `requestId`). El manejador global de errores llega en la Fase 2.
+- Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
+  appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos generados durante la
+  caída se descartan (buffer en memoria, sin bloquear requests).
 - La API de dominio, MinIO, Resilience4j y el seed llegan en las fases siguientes.

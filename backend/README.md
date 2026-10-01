@@ -5,9 +5,9 @@ API REST de Lebane — Spring Boot 3.5 · Java 21 · Maven. Documentación compl
 ## Comandos
 
 ```bash
-mvn test                 # tests unitarios (*Test); no requieren Docker
-mvn verify               # + tests de integración (*IT) con Testcontainers; requiere Docker
-mvn spring-boot:run      # requiere PostgreSQL (docker compose up -d postgres minio)
+./mvnw test               # tests unitarios (*Test); no requieren Docker
+./mvnw verify             # + tests de integración (*IT) con Testcontainers; requiere Docker
+./mvnw spring-boot:run    # requiere PostgreSQL (docker compose up -d postgres minio)
 docker build -t lebane-backend:local .
 ```
 

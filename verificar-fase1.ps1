@@ -1,4 +1,4 @@
-# Verificacion de la Fase 1 de Lebane (Windows PowerShell 5.1+).
+﻿# Verificacion de la Fase 1 de Lebane (Windows PowerShell 5.1+).
 # Uso, desde la raiz del repo:
 #   powershell -ExecutionPolicy Bypass -File .\verificar-fase1.ps1
 # Opcional: -SkipBackend -SkipFrontend -SkipCompose -SkipObservability
@@ -41,7 +41,9 @@ function Invoke-Step([string]$name, [string]$command, [string]$workdir = $root) 
 function Get-HttpStatus([string]$url) {
     try {
         $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-        return @{ Code = [int]$r.StatusCode; Body = $r.Content }
+        # PS 5.1 devuelve byte[] para content-types no reconocidos como texto (application/vnd.spring-boot.actuator.v3+json)
+        $body = if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) } else { $r.Content }
+        return @{ Code = [int]$r.StatusCode; Body = $body }
     } catch {
         $resp = $_.Exception.Response
         if ($resp) {
@@ -75,7 +77,9 @@ function Read-DotEnv([string]$path) {
 
 # ---------- Prerrequisitos ----------
 Write-Host "==> Prerrequisitos" -ForegroundColor Cyan
-$mvn = (Get-Command mvn -ErrorAction SilentlyContinue).Source
+# Preferencia: Maven Wrapper del repo; luego mvn del PATH; luego el Maven embebido de IntelliJ.
+$mvn = Join-Path $root 'backend\mvnw.cmd'
+if (-not (Test-Path $mvn)) { $mvn = (Get-Command mvn -ErrorAction SilentlyContinue).Source }
 if (-not $mvn) {
     $bundled = Get-ChildItem 'C:\Program Files\JetBrains' -Directory -ErrorAction SilentlyContinue |
         ForEach-Object { Join-Path $_.FullName 'plugins\maven\lib\maven3\bin\mvn.cmd' } |
@@ -84,10 +88,17 @@ if (-not $mvn) {
 }
 Write-Result 'maven-disponible' ([bool]$mvn) "$mvn"
 
-if (-not $env:JAVA_HOME -or -not (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
-    $jdk = Get-ChildItem (Join-Path $env:USERPROFILE '.jdks') -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '21' } | Select-Object -First 1
-    if ($jdk) { $env:JAVA_HOME = $jdk.FullName }
+function Test-Jdk21([string]$home_) {
+    if (-not $home_ -or -not (Test-Path (Join-Path $home_ 'bin\java.exe'))) { return $false }
+    return (((cmd /c "`"$home_\bin\java.exe`" -version 2>&1") -join ' ') -match 'version "21')
+}
+# JAVA_HOME puede existir pero apuntar a otra versión: se busca un JDK 21 en las ubicaciones habituales.
+if (-not (Test-Jdk21 $env:JAVA_HOME)) {
+    $candidates = @((Join-Path $env:USERPROFILE '.jdks'), 'C:\Program Files\Java', 'C:\Program Files\Eclipse Adoptium',
+        'C:\Program Files\Microsoft', 'C:\Program Files\Amazon Corretto', 'C:\Program Files\Zulu') |
+        ForEach-Object { Get-ChildItem $_ -Directory -ErrorAction SilentlyContinue } |
+        Where-Object { $_.Name -match '21' -and (Test-Jdk21 $_.FullName) } | Select-Object -First 1
+    if ($candidates) { $env:JAVA_HOME = $candidates.FullName }
 }
 $javaVersion = ''
 if ($env:JAVA_HOME) { $javaVersion = (cmd /c "`"$env:JAVA_HOME\bin\java.exe`" -version 2>&1") -join ' ' }
@@ -155,12 +166,12 @@ if (-not $SkipCompose -and $dockerOk) {
         $back = Wait-HttpStatus "$base/actuator/health/readiness" 200 120
         Write-Result 'readiness-recupera-200' ($back.Code -eq 200) "($($back.Code))"
 
-        cmd /c "docker compose logs --no-color --tail 200 backend > `"$logDir\backend-container.log`" 2>&1"
-        $jsonLines = Get-Content "$logDir\backend-container.log" | Where-Object { $_ -match '\|\s*\{' }
+        # Todas las líneas (sin prefijo de servicio) deben ser JSON: una línea de texto plano también es un fallo.
+        cmd /c "docker compose logs --no-color --no-log-prefix --tail 300 backend > `"$logDir\backend-container.log`" 2>&1"
+        $jsonLines = @(Get-Content "$logDir\backend-container.log" | Where-Object { $_.Trim() })
         $invalid = 0
         foreach ($l in $jsonLines) {
-            $json = $l.Substring($l.IndexOf('{'))
-            try { $null = $json | ConvertFrom-Json } catch { $invalid++ }
+            try { $obj = $l | ConvertFrom-Json; if (-not $obj.'@timestamp') { $invalid++ } } catch { $invalid++ }
         }
         Write-Result 'logs-json-validos' ($jsonLines.Count -gt 0 -and $invalid -eq 0) "($($jsonLines.Count) lineas, $invalid invalidas)"
     }
