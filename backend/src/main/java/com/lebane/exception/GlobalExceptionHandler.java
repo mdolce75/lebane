@@ -22,6 +22,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
@@ -85,14 +86,25 @@ public class GlobalExceptionHandler {
         return validationError(request, fieldErrors);
     }
 
-    /** Restricciones sobre parámetros de controllers ({@code @PathVariable}, {@code @RequestParam}). */
+    /**
+     * Validación a nivel de método: se usa cuando el handler tiene restricciones en sus parámetros (p. ej.
+     * {@code @Positive} en el id). Incluye también los errores del {@code @Valid @RequestBody}, que llegan como
+     * {@link ParameterErrors} y se desglosan por campo, igual que en {@link MethodArgumentNotValidException}.
+     */
     @ExceptionHandler(HandlerMethodValidationException.class)
     ResponseEntity<ApiError> handleMethodValidation(HandlerMethodValidationException ex, HttpServletRequest request) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         ex.getParameterValidationResults().forEach(result -> {
-            String name = result.getMethodParameter().getParameterName();
-            result.getResolvableErrors().forEach(error -> fieldErrors.putIfAbsent(
-                    name != null ? name : "parametro", error.getDefaultMessage()));
+            if (result instanceof ParameterErrors errors) {
+                errors.getFieldErrors()
+                        .forEach(error -> fieldErrors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+                errors.getGlobalErrors()
+                        .forEach(error -> fieldErrors.putIfAbsent(error.getObjectName(), error.getDefaultMessage()));
+            } else {
+                String name = result.getMethodParameter().getParameterName();
+                result.getResolvableErrors().forEach(error -> fieldErrors.putIfAbsent(
+                        name != null ? name : "parametro", error.getDefaultMessage()));
+            }
         });
         return validationError(request, fieldErrors);
     }
