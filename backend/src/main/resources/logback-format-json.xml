@@ -8,6 +8,9 @@
 <included>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!-- Sin propiedades del contexto de Logback (LOGSTASH_HOST, LOG_FORMAT, ...): filtrarían configuración
+                 interna en cada evento. Los campos comunes se agregan explícitamente en customFields. -->
+            <includeContext>false</includeContext>
             <customFields>${LOG_CUSTOM_FIELDS}</customFields>
             <fieldNames>
                 <logger>logger</logger>

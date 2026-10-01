@@ -68,6 +68,9 @@ class JsonLoggingTest {
         assertThat(event.path("status").asInt()).isEqualTo(200);
         assertThat(event.path("durationMs").isNumber()).isTrue();
         assertThat(event.has("remoteAddress")).isTrue();
+        // Las propiedades internas del contexto de Logback no deben filtrarse en los eventos.
+        assertThat(event.has("LOGSTASH_HOST")).isFalse();
+        assertThat(event.has("LOG_FORMAT")).isFalse();
     }
 
     @Test
