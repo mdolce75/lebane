@@ -37,6 +37,8 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/test/setup.ts'],
       css: false,
       restoreMocks: true,
+      // Tests de pantallas completas con user-event (tipeo real en formularios largos).
+      testTimeout: 20_000,
       coverage: {
         provider: 'v8',
         reporter: ['text', 'html'],
