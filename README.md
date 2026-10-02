@@ -132,17 +132,5 @@ El **CI** ([GitHub Actions](.github/workflows/ci.yml)) corre todo en cada PR, in
 | [API](docs/api.md) | Endpoints con ejemplos, errores, listado (paginación, filtros, orden) y validación de performance |
 | [Observabilidad y seguridad](docs/observabilidad.md) | Actuator, liveness y readiness, logging estructurado, correlation ID, datos sensibles |
 | [Calidad](docs/calidad.md) | Tests, cobertura, E2E, CI y validación final de punta a punta |
-| [Decisiones y limitaciones](docs/decisiones.md) | Decisiones técnicas con su justificación y limitaciones conocidas |
+| [Decisiones técnicas](docs/decisiones.md) | Decisiones técnicas con su justificación |
 | [OpenAPI](docs/openapi.json) | Contrato de la API (también en Swagger UI) |
-
-## Limitaciones conocidas
-
-Las más relevantes (la lista completa, con su motivo, está en [docs/decisiones.md](docs/decisiones.md#limitaciones-conocidas)):
-
-- **Sin autenticación de usuarios**: el desafío no define usuarios ni roles; la API de dominio es pública y solo
-  Actuator está protegido.
-- **Paginación por `OFFSET`**, limitada a los primeros 10.000 resultados por búsqueda; para recorridos completos
-  convendría paginación por cursor.
-- **Objetos huérfanos en MinIO** si falla un borrado: quedan registrados en los logs, pero falta un job de
-  reconciliación.
-- **Estado de los circuit breakers en memoria**: con varias réplicas, cada una tiene su propio circuito.
