@@ -12,6 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.lebane.departamento.dto.ConsultaRequest;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.mapper.ConsultaMapper;
 import com.lebane.departamento.mapper.DepartamentoMapper;
@@ -75,8 +76,9 @@ public class DevDataSeeder implements ApplicationRunner {
             }
         }
         int fotos = agregarFotos();
+        int consultas = agregarConsultas();
         log.info("Seed de desarrollo aplicado", kv("creados", creados), kv("existentes", existentes),
-                kv("fotos", fotos));
+                kv("fotos", fotos), kv("consultas", consultas));
     }
 
     /** Cantidad de fotos de ejemplo por departamento: de 0 a 3 (algunos sin fotos muestran el placeholder). */
@@ -105,6 +107,34 @@ public class DevDataSeeder implements ApplicationRunner {
             }
         }
         return subidas;
+    }
+
+    /**
+     * Consultas de ejemplo adicionales ({@link SeedConsultas}) para cada aviso del seed. Agrega solo las que faltan
+     * (identificadas por su email), así que también completa bases creadas con un seed anterior y reiniciar no
+     * duplica nada. No toca las consultas reales ni las de los avisos que no son del seed.
+     */
+    private int agregarConsultas() {
+        int agregadas = 0;
+        for (SeedDepartamento seed : SeedData.departamentos()) {
+            Long id = departamentoRepository.findIdByCodigo(seed.codigo()).orElse(null);
+            if (id == null) {
+                continue;
+            }
+            Integer nuevas = transactionTemplate.execute(status -> {
+                int count = 0;
+                for (ConsultaRequest consulta : SeedConsultas.para(seed.codigo())) {
+                    if (!consultaRepository.existsByDepartamentoIdAndEmail(id, consulta.email())) {
+                        consultaRepository.save(consultaMapper.toEntity(
+                                departamentoRepository.getReferenceById(id), consulta));
+                        count++;
+                    }
+                }
+                return count;
+            });
+            agregadas += nuevas == null ? 0 : nuevas;
+        }
+        return agregadas;
     }
 
     /** @return {@code true} si se insertó; {@code false} si ya existía. */
