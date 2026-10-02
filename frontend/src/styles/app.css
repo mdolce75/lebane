@@ -225,11 +225,11 @@ address { font-style: normal; margin-bottom: 0.5rem; }
 .gallery__thumb--active { border-color: var(--color-primary); }
 .gallery__thumb-image { width: 100%; height: 100%; object-fit: cover; }
 
-/* Ajustes del listado: el estado (chips) ocupa dos columnas; el placeholder de la tarjeta no es un link visible */
-.filters__grid fieldset.field { grid-column: span 2; }
+/* Ajustes del listado: el estado (chips) ocupa la fila completa, con cualquier cantidad de columnas (un span fijo
+   creaba una columna implícita y desbordaba cuando la grilla tenía menos); el placeholder no es un link visible. */
+.filters__grid fieldset.field { grid-column: 1 / -1; }
 fieldset.field legend { margin-bottom: 0.35rem; }
 .card__media { text-decoration: none; }
-@media (max-width: 420px) { .filters__grid fieldset.field { grid-column: 1 / -1; } }
 
 /* Fotos: sección de bloque (no grilla); el contenido va debajo de la leyenda flotante, con todo el ancho */
 .form__section--full legend { margin-bottom: 1rem; }
