@@ -1,5 +1,4 @@
-import { useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { Pagination } from '../../../shared/components/Pagination';
@@ -8,24 +7,12 @@ import { plural } from '../../../shared/format/format';
 import { useDepartamentos } from '../api/queries';
 import { DepartamentoCard } from './DepartamentoCard';
 import { FiltrosPanel } from './FiltrosPanel';
-import {
-  hasActiveFilters,
-  maxPage,
-  PAGE_SIZES,
-  parseListadoParams,
-  SORT_OPTIONS,
-  toSearchParams,
-  type ListadoParams,
-} from './listadoParams';
+import { hasActiveFilters, maxPage, PAGE_SIZES, SORT_OPTIONS } from './listadoParams';
+import { useListadoSearch } from './useListadoSearch';
 
 export function DepartamentosListPage() {
-  const [search, setSearch] = useSearchParams();
-  const params = useMemo(() => parseListadoParams(search), [search]);
+  const { params, update, clear } = useListadoSearch();
   const { data, isPending, isError, error, isFetching, isPlaceholderData, refetch } = useDepartamentos(params);
-
-  const update = (changes: Partial<ListadoParams>, resetPage = true) => {
-    setSearch(toSearchParams({ ...params, ...changes, ...(resetPage ? { page: 0 } : {}) }));
-  };
 
   return (
     <section>
@@ -34,7 +21,7 @@ export function DepartamentosListPage() {
         <Link to="/departamentos/nuevo" className="button">Nuevo departamento</Link>
       </div>
 
-      <FiltrosPanel params={params} onApply={(filtros) => update(filtros)} onClear={() => setSearch(new URLSearchParams())} />
+      <FiltrosPanel params={params} onApply={(filtros) => update(filtros)} onClear={clear} />
 
       <div className="toolbar">
         <p className="muted" aria-live="polite">
@@ -72,7 +59,7 @@ export function DepartamentosListPage() {
           {hasActiveFilters(params) ? (
             <p>
               Ningún departamento coincide con los filtros.{' '}
-              <button type="button" className="link-button" onClick={() => setSearch(new URLSearchParams())}>
+              <button type="button" className="link-button" onClick={clear}>
                 Limpiar filtros
               </button>
             </p>

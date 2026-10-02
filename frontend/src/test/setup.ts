@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
+
+// Las rutas de alta, detalle y edición son lazy: el primer test de cada archivo espera además que Vitest transforme
+// ese módulo (en frío y con las suites en paralelo puede superar el segundo por defecto de findBy/waitFor).
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom reemplaza AbortSignal, pero el Request nativo de Node (que React Router usa al navegar) solo acepta el
 // AbortSignal propio de Node. En tests se descarta la señal al construir Request: solo afecta la cancelación de
