@@ -129,7 +129,11 @@ GitHub Actions ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) en ca
   los logs) a partir de `.env.example`.
 - **Permisos de solo lectura** (`contents: read`) y cancelación de la corrida anterior al pushear de nuevo.
 - **Dependabot** ([`.github/dependabot.yml`](../.github/dependabot.yml)): PRs semanales para Maven, npm, imágenes de
-  Docker y GitHub Actions, con versiones menores y parches agrupados; cada PR pasa por el mismo CI.
+  Docker y GitHub Actions, con versiones menores y parches agrupados; cada PR pasa por el mismo CI. Las versiones
+  mayores que requieren una migración planificada se ignoran, cada una con su motivo en el archivo: Spring Boot 4,
+  springdoc 3 (requiere Boot 4), MinIO SDK ≥ 8.6 (OkHttp 5 / Kotlin 2), logstash-logback-encoder 9 y Vite 8. Las
+  imágenes de Docker se mantienen en la versión del runtime del proyecto (Java 21, Node 22); el salto a otra LTS se
+  hace a mano junto con el CI.
 
 ## Validación final
 
