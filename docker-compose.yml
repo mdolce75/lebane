@@ -40,7 +40,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER es requerido}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD es requerido}
     ports:
-      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      # Solo en el host local, como el resto de los servicios internos (STORAGE_PUBLIC_URL apunta a localhost).
+      - "127.0.0.1:${MINIO_API_HOST_PORT:-9000}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
     volumes:
       - minio-data:/data
@@ -115,7 +116,9 @@ services:
       LOGSTASH_HOST: ${LOGSTASH_HOST:-logstash}
       LOGSTASH_PORT: ${LOGSTASH_PORT:-5000}
     ports:
-      - "${BACKEND_HOST_PORT:-8080}:8080"
+      # Solo en el host local (pruebas y curl): el acceso de usuarios es por el frontend (nginx), único puerto
+      # publicado en todas las interfaces.
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8080}:8080"
     healthcheck:
       test:
         [
@@ -144,6 +147,8 @@ services:
         condition: service_healthy
     environment:
       BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-http://backend:8080}
+      # Origen desde el que el navegador carga las fotos: se permite en la Content-Security-Policy.
+      IMAGES_ORIGIN: ${STORAGE_PUBLIC_URL:-http://localhost:9000}
     ports:
       - "${FRONTEND_HOST_PORT:-3000}:8080"
     healthcheck:

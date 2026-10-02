@@ -20,9 +20,14 @@ server {
     resolver_timeout 3s;
     set $backend_upstream ${BACKEND_UPSTREAM};
 
+    # Headers de seguridad: SOLO a nivel server. nginx no hereda los add_header de este nivel en un location que
+    # declara los suyos, así que ningún location usa add_header (el cache se configura con `expires`).
+    # CSP: sin scripts ni estilos inline (el build de Vite no los genera); imágenes del propio origen, blob: (vistas
+    # previas antes de subir) y el origen público de MinIO (IMAGES_ORIGIN = STORAGE_PUBLIC_URL).
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: ${IMAGES_ORIGIN}; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
 
     # API REST -> backend (mismo origen para el navegador: no requiere CORS)
     location /api/ {
@@ -33,6 +38,11 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # El backend ya envía estos headers; nginx agrega los suyos (nivel server): se ocultan para no duplicarlos.
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header Referrer-Policy;
+        proxy_hide_header X-XSS-Protection;
         proxy_connect_timeout 5s;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
@@ -43,6 +53,10 @@ server {
         proxy_pass $backend_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Request-Id $lebane_request_id;
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header Referrer-Policy;
+        proxy_hide_header X-XSS-Protection;
         proxy_connect_timeout 3s;
         proxy_read_timeout 5s;
     }
@@ -51,18 +65,16 @@ server {
         return 404;
     }
 
+    # Nombres con hash de contenido: se pueden cachear un año.
     location /assets/ {
         expires 1y;
-        add_header Cache-Control "public, immutable" always;
-        add_header X-Content-Type-Options "nosniff" always;
         try_files $uri =404;
     }
 
     # SPA: cualquier otra ruta devuelve index.html
     location / {
-        add_header Cache-Control "no-cache" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "DENY" always;
+        # index.html se revalida siempre (Cache-Control: no-cache): así toma los assets de cada despliegue.
+        expires -1;
         try_files $uri $uri/ /index.html;
     }
 }

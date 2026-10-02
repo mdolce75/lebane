@@ -34,8 +34,9 @@ class ActuatorSecurityTest {
     private MockMvc mockMvc;
 
     @Test
-    void infoIsPublic() throws Exception {
-        mockMvc.perform(get("/actuator/info")).andExpect(status().isOk());
+    void infoIsPublicWithoutJvmDetails() throws Exception {
+        mockMvc.perform(get("/actuator/info")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.java").doesNotExist());
     }
 
     @ParameterizedTest

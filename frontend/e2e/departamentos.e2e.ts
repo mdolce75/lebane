@@ -4,6 +4,19 @@ import { crearDepartamento, marca, obtenerDepartamento, PNG_1X1 } from './suppor
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const esListado = (r: Request) => new URL(r.url()).pathname === '/api/v1/departamentos' && r.method() === 'GET';
 
+// nginx envía una Content-Security-Policy estricta: cualquier recurso bloqueado (p. ej. las fotos de MinIO o las
+// vistas previas blob:) aparece como error en la consola y hace fallar el test.
+let violacionesCsp: string[] = [];
+test.beforeEach(({ page }) => {
+  violacionesCsp = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && /Content Security Policy/i.test(msg.text())) violacionesCsp.push(msg.text());
+  });
+});
+test.afterEach(() => {
+  expect(violacionesCsp, 'violaciones de Content-Security-Policy').toEqual([]);
+});
+
 test.describe('Listado', () => {
   test('filtra y ordena en el servidor, con el estado en la URL', async ({ page, request }) => {
     const m = marca();
