@@ -47,13 +47,11 @@ select count(d1_0.id) from departamento d1_0 where lower(d1_0.titulo) like '%rec
 \echo '=== 8. Agregados de una página de 20 IDs (imagen principal, fotos, consultas)'
 SELECT string_agg(id::text, ',') AS ids
   FROM (SELECT id FROM departamento ORDER BY created_at DESC, id DESC LIMIT 20) t \gset
+-- Generada por la Criteria API (DepartamentoListadoRepositoryImpl#agregados): subconsultas escalares correlacionadas.
 EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
-SELECT d.id, COALESCE(img.total, 0) AS cantidad_imagenes, principal.object_key AS imagen_principal,
-       COALESCE(con.total, 0) AS cantidad_consultas
-  FROM departamento d
-  LEFT JOIN (SELECT departamento_id, COUNT(*) AS total, MIN(posicion) AS primera
-               FROM imagen WHERE departamento_id IN (:ids) GROUP BY departamento_id) img ON img.departamento_id = d.id
-  LEFT JOIN imagen principal ON principal.departamento_id = d.id AND principal.posicion = img.primera
-  LEFT JOIN (SELECT departamento_id, COUNT(*) AS total
-               FROM consulta WHERE departamento_id IN (:ids) GROUP BY departamento_id) con ON con.departamento_id = d.id
- WHERE d.id IN (:ids);
+select d1_0.id,
+       (select count(i1_0.posicion) from imagen i1_0 where i1_0.departamento_id=d1_0.id),
+       (select i2_0.object_key from imagen i2_0 where i2_0.departamento_id=d1_0.id
+           and i2_0.posicion=(select min(i3_0.posicion) from imagen i3_0 where i3_0.departamento_id=d1_0.id)),
+       (select count(c1_0.departamento_id) from consulta c1_0 where c1_0.departamento_id=d1_0.id)
+  from departamento d1_0 where d1_0.id in (:ids);
