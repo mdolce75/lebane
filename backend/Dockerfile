@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------- Build ----------
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3-eclipse-temurin-24 AS build
 WORKDIR /workspace
 COPY pom.xml .
 # Cache de dependencias independiente del código fuente
