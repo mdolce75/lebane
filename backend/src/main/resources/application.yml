@@ -154,6 +154,26 @@ resilience4j:
         base-config: default
         timeout-duration: ${ADDRESS_PROVIDER_TIMEOUT_MS:2000}ms
 
+# Documentación OpenAPI (springdoc). OPENAPI_ENABLED=false la apaga por completo (spec y Swagger UI responden 404).
+springdoc:
+  api-docs:
+    enabled: ${OPENAPI_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${OPENAPI_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+  # Solo la API de dominio: Actuator tiene su propia documentación y no forma parte del contrato público.
+  paths-to-match: /api/**
+  # Las respuestas de error se documentan por operación (las que cada endpoint puede devolver de verdad), no la
+  # lista genérica de todos los @ExceptionHandler del GlobalExceptionHandler.
+  override-with-generic-response: false
+  # Salida determinística: el spec versionado en docs/openapi.json se compara en los tests.
+  writer-with-order-by-keys: true
+  default-produces-media-type: application/json
+
 management:
   # Por defecto Actuator comparte el puerto de la app. Para aislarlo en red interna definir
   # MANAGEMENT_SERVER_PORT (binding relajado de Spring) y no publicarlo fuera de Docker.

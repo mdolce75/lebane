@@ -1,0 +1,1759 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "description" : "API REST de Lebane para gestionar departamentos en venta: alta, edición, listado con filtros, fotos y consultas de interesados.\n\n**Convenciones**\n\n- **Errores**: toda respuesta 4xx/5xx tiene el mismo esquema `ApiError`, con un código estable en `error`, un mensaje apto para mostrar al usuario y el `requestId` para soporte. Nunca incluye stack traces, SQL ni detalles de infraestructura. Los errores de validación detallan cada campo en `fieldErrors` (las claves son las rutas del body o los nombres de los parámetros, p. ej. `direccion.ciudad`).\n- **Correlation ID**: cada request puede enviar `X-Request-Id`; si no lo envía o no es válido, el backend genera uno. La respuesta siempre lo devuelve y queda en todos los logs del request.\n- **Concurrencia optimista**: el detalle, el alta y la edición devuelven `ETag` con la versión del departamento. Enviarlo en `If-Match` al editar evita pisar cambios de otro usuario (412 si cambió).\n- **Paginación**: `page` (desde 0) y `size` (1 a 100), con una ventana máxima de 10.000 resultados por búsqueda. La respuesta usa el formato estándar de Spring Data (`content` + `page`).\n- **Disponibilidad**: si una dependencia no crítica falla (storage de imágenes, proveedor de direcciones), solo se degradan las operaciones que la usan: 503 `STORAGE_UNAVAILABLE` al subir fotos, respuesta `degradado: true` en el autocompletado. El resto de la API sigue funcionando.\n",
+    "title" : "Lebane API",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "/",
+    "description" : "Mismo origen que la documentación"
+  } ],
+  "tags" : [ {
+    "description" : "Alta, detalle, edición y listado con filtros",
+    "name" : "Departamentos"
+  }, {
+    "description" : "Fotos de un departamento (hasta 5, en MinIO)",
+    "name" : "Imágenes"
+  }, {
+    "description" : "Consultas de interesados sobre un departamento",
+    "name" : "Consultas"
+  }, {
+    "description" : "Autocompletado de direcciones",
+    "name" : "Direcciones"
+  } ],
+  "paths" : {
+    "/api/v1/departamentos" : {
+      "get" : {
+        "description" : "Listado paginado con filtros y orden, resueltos en la base de datos (nunca en memoria). Cada ítem trae su foto principal y la cantidad de fotos y de consultas. Los filtros se combinan con AND; los valores de `estado` se combinan con OR.",
+        "operationId" : "listar",
+        "parameters" : [ {
+          "description" : "Texto a buscar en el título (sin distinguir mayúsculas; mínimo 3 caracteres)",
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "description" : "Texto a buscar en el título (sin distinguir mayúsculas; mínimo 3 caracteres)",
+            "maxLength" : 100,
+            "minLength" : 3
+          }
+        }, {
+          "description" : "Ciudad exacta (sin distinguir mayúsculas)",
+          "in" : "query",
+          "name" : "ciudad",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "description" : "Ciudad exacta (sin distinguir mayúsculas)",
+            "maxLength" : 80,
+            "minLength" : 0
+          }
+        }, {
+          "description" : "Estados a incluir; repetir el parámetro para varios (estado=DISPONIBLE&estado=RESERVADO)",
+          "in" : "query",
+          "name" : "estado",
+          "required" : false,
+          "schema" : {
+            "type" : "array",
+            "description" : "Estados a incluir; repetir el parámetro para varios (estado=DISPONIBLE&estado=RESERVADO)",
+            "items" : {
+              "type" : "string",
+              "description" : "Estado comercial. VENDIDO no recibe nuevas consultas.",
+              "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ]
+            }
+          }
+        }, {
+          "description" : "Moneda. Obligatoria si se filtra por precio (ARS y USD no son comparables)",
+          "in" : "query",
+          "name" : "moneda",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "description" : "Moneda del precio: pesos argentinos o dólares.",
+            "enum" : [ "ARS", "USD" ]
+          }
+        }, {
+          "description" : "Precio mínimo (requiere moneda)",
+          "in" : "query",
+          "name" : "precioMin",
+          "required" : false,
+          "schema" : {
+            "type" : "number",
+            "description" : "Precio mínimo (requiere moneda)",
+            "minimum" : 0
+          }
+        }, {
+          "description" : "Precio máximo (requiere moneda; mayor o igual que precioMin)",
+          "in" : "query",
+          "name" : "precioMax",
+          "required" : false,
+          "schema" : {
+            "type" : "number",
+            "description" : "Precio máximo (requiere moneda; mayor o igual que precioMin)",
+            "minimum" : 0
+          }
+        }, {
+          "description" : "Ambientes mínimos",
+          "in" : "query",
+          "name" : "ambientesMin",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Ambientes mínimos",
+            "maximum" : 20,
+            "minimum" : 1
+          }
+        }, {
+          "description" : "Dormitorios mínimos",
+          "in" : "query",
+          "name" : "dormitoriosMin",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Dormitorios mínimos",
+            "maximum" : 19,
+            "minimum" : 0
+          }
+        }, {
+          "description" : "Baños mínimos",
+          "in" : "query",
+          "name" : "banosMin",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Baños mínimos",
+            "maximum" : 10,
+            "minimum" : 1
+          }
+        }, {
+          "description" : "Superficie mínima en m²",
+          "in" : "query",
+          "name" : "superficieMin",
+          "required" : false,
+          "schema" : {
+            "type" : "number",
+            "description" : "Superficie mínima en m²",
+            "minimum" : 0
+          }
+        }, {
+          "description" : "Superficie máxima en m² (mayor o igual que superficieMin)",
+          "in" : "query",
+          "name" : "superficieMax",
+          "required" : false,
+          "schema" : {
+            "type" : "number",
+            "description" : "Superficie máxima en m² (mayor o igual que superficieMin)",
+            "minimum" : 0
+          }
+        }, {
+          "description" : "true: solo con fotos; false: solo sin fotos; omitido: todos",
+          "in" : "query",
+          "name" : "conImagenes",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "description" : "true: solo con fotos; false: solo sin fotos; omitido: todos"
+          }
+        }, {
+          "description" : "Página, desde 0. (page + 1) × size no puede superar 10.000",
+          "example" : 0,
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "description" : "Página, desde 0. (page + 1) × size no puede superar 10.000",
+            "example" : 0,
+            "minimum" : 0
+          }
+        }, {
+          "description" : "Tamaño de página",
+          "example" : 20,
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "description" : "Tamaño de página",
+            "example" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        }, {
+          "description" : "Orden: createdAt, precio o superficieM2, con ,asc o ,desc. El precio se ordena dentro de cada moneda; siempre se desempata por id",
+          "in" : "query",
+          "name" : "sort",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "createdAt,desc",
+            "description" : "Orden: createdAt, precio o superficieM2, con ,asc o ,desc. El precio se ordena dentro de cada moneda; siempre se desempata por id",
+            "pattern" : "^(createdAt|precio|superficieM2)(,(asc|desc|ASC|DESC))?$"
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagedModelDepartamentoListItemResponse"
+                }
+              }
+            },
+            "description" : "Página de resultados (puede estar vacía)",
+            "headers" : {
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Listar departamentos",
+        "tags" : [ "Departamentos" ]
+      },
+      "post" : {
+        "description" : "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. Las fotos se suben después, de a una, con el endpoint de imágenes.",
+        "operationId" : "crear",
+        "parameters" : [ {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DepartamentoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DepartamentoDetailResponse"
+                }
+              }
+            },
+            "description" : "Departamento creado",
+            "headers" : {
+              "ETag" : {
+                "description" : "Versión del departamento (p. ej. \"3\"). Enviarla en If-Match al editar para no pisar cambios de otro usuario.",
+                "schema" : {
+                  "type" : "string",
+                  "example" : "\"0\""
+                },
+                "style" : "simple"
+              },
+              "Location" : {
+                "description" : "Ruta relativa del departamento creado",
+                "schema" : {
+                  "type" : "string",
+                  "example" : "/api/v1/departamentos/1"
+                },
+                "style" : "simple"
+              },
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "415" : {
+            "$ref" : "#/components/responses/UnsupportedMediaType"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Crear un departamento",
+        "tags" : [ "Departamentos" ]
+      }
+    },
+    "/api/v1/departamentos/{departamentoId}/imagenes" : {
+      "post" : {
+        "description" : "Una foto por request, en `multipart/form-data` con el archivo en el campo `archivo`. El tipo se detecta por el **contenido** (JPEG, PNG o WebP), no por la extensión ni por el Content-Type declarado: un archivo que no es imagen responde 400. Máximo 5 MB por foto y 5 fotos por departamento (409 `LIMITE_IMAGENES_ALCANZADO`). La primera foto es la principal. Si el storage no está disponible responde 503 `STORAGE_UNAVAILABLE` y no queda nada a medias.",
+        "operationId" : "subir",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "departamentoId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "archivo" : {
+                    "type" : "string",
+                    "format" : "binary",
+                    "description" : "Archivo de imagen (JPEG, PNG o WebP; hasta 5 MB)"
+                  }
+                },
+                "required" : [ "archivo" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImagenResponse"
+                }
+              }
+            },
+            "description" : "Foto guardada",
+            "headers" : {
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
+          },
+          "413" : {
+            "$ref" : "#/components/responses/PayloadTooLarge"
+          },
+          "415" : {
+            "$ref" : "#/components/responses/UnsupportedMediaType"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Subir una foto",
+        "tags" : [ "Imágenes" ]
+      }
+    },
+    "/api/v1/departamentos/{departamentoId}/imagenes/{imagenId}" : {
+      "delete" : {
+        "description" : "Elimina la foto del departamento. Si el storage no está disponible, la foto se elimina igual (deja de verse en la aplicación) y el archivo queda registrado en los logs como huérfano para limpiarlo después.",
+        "operationId" : "eliminar",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "departamentoId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "ID de la foto",
+          "example" : 19,
+          "in" : "path",
+          "name" : "imagenId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "Foto eliminada",
+            "headers" : {
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Eliminar una foto",
+        "tags" : [ "Imágenes" ]
+      }
+    },
+    "/api/v1/departamentos/{id}" : {
+      "get" : {
+        "description" : "Detalle completo: dirección, fotos ordenadas y cantidad de consultas.",
+        "operationId" : "obtener",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DepartamentoDetailResponse"
+                }
+              }
+            },
+            "description" : "Departamento encontrado",
+            "headers" : {
+              "ETag" : {
+                "description" : "Versión del departamento (p. ej. \"3\"). Enviarla en If-Match al editar para no pisar cambios de otro usuario.",
+                "schema" : {
+                  "type" : "string",
+                  "example" : "\"3\""
+                },
+                "style" : "simple"
+              },
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Obtener un departamento",
+        "tags" : [ "Departamentos" ]
+      },
+      "put" : {
+        "description" : "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de pisar sus cambios.",
+        "operationId" : "actualizar",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "ETag leído (p. ej. \"3\"). Opcional: sin él, la edición no verifica la versión.",
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "\"3\""
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DepartamentoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DepartamentoDetailResponse"
+                }
+              }
+            },
+            "description" : "Departamento actualizado",
+            "headers" : {
+              "ETag" : {
+                "description" : "Nueva versión del departamento",
+                "schema" : {
+                  "type" : "string",
+                  "example" : "\"4\""
+                },
+                "style" : "simple"
+              },
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
+          },
+          "412" : {
+            "$ref" : "#/components/responses/PreconditionFailed"
+          },
+          "415" : {
+            "$ref" : "#/components/responses/UnsupportedMediaType"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Editar un departamento",
+        "tags" : [ "Departamentos" ]
+      }
+    },
+    "/api/v1/departamentos/{id}/consultas" : {
+      "post" : {
+        "description" : "Registra la consulta de un interesado. Un departamento VENDIDO no recibe consultas (409 `DEPARTAMENTO_NO_DISPONIBLE`). La respuesta no devuelve los datos personales enviados.",
+        "operationId" : "crearConsulta",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConsultaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConsultaCreatedResponse"
+                }
+              }
+            },
+            "description" : "Consulta registrada",
+            "headers" : {
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
+          },
+          "415" : {
+            "$ref" : "#/components/responses/UnsupportedMediaType"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Enviar una consulta",
+        "tags" : [ "Consultas" ]
+      }
+    },
+    "/api/v1/direcciones/autocompletar" : {
+      "get" : {
+        "description" : "Sugerencias para una dirección parcial, con calle, altura, ciudad, provincia y coordenadas. Siempre responde 200 si los parámetros son válidos: si el proveedor externo falla, tarda o tiene el circuito abierto, devuelve `degradado: true`, sin sugerencias y con un mensaje para cargar la dirección a mano (nunca datos inventados).",
+        "operationId" : "autocompletar",
+        "parameters" : [ {
+          "description" : "Dirección parcial (3 a 100 caracteres)",
+          "example" : "Gorriti 4850",
+          "in" : "query",
+          "name" : "q",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 3
+          }
+        }, {
+          "description" : "Máximo de sugerencias (1 a 10; por defecto, el configurado en el backend)",
+          "example" : 5,
+          "in" : "query",
+          "name" : "limite",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 10,
+            "minimum" : 1
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutocompleteResponse"
+                }
+              }
+            },
+            "description" : "Sugerencias, o respuesta degradada si el proveedor no está disponible",
+            "headers" : {
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          }
+        },
+        "summary" : "Autocompletar una dirección",
+        "tags" : [ "Direcciones" ]
+      }
+    }
+  },
+  "components" : {
+    "responses" : {
+      "BadRequest" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "json" : {
+                "summary" : "JSON mal formado",
+                "value" : {
+                  "error" : "BAD_REQUEST",
+                  "message" : "El cuerpo de la solicitud no es JSON válido",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 400,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "validacion" : {
+                "summary" : "Validación de campos",
+                "value" : {
+                  "error" : "VALIDATION_ERROR",
+                  "fieldErrors" : {
+                    "dormitorios" : "debe ser menor que la cantidad de ambientes",
+                    "titulo" : "no debe estar vacío"
+                  },
+                  "message" : "La solicitud contiene datos inválidos",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 400,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "Datos inválidos: body, parámetros o archivo. Cada campo con error se detalla en `fieldErrors`.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "Conflict" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "concurrencia" : {
+                "summary" : "Modificación simultánea",
+                "value" : {
+                  "error" : "CONCURRENT_MODIFICATION",
+                  "message" : "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
+                  "path" : "/api/v1/departamentos/7",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "limite" : {
+                "summary" : "Límite de fotos alcanzado",
+                "value" : {
+                  "error" : "LIMITE_IMAGENES_ALCANZADO",
+                  "message" : "El departamento ya tiene el máximo de 5 fotos",
+                  "path" : "/api/v1/departamentos/7/imagenes",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "vendido" : {
+                "summary" : "Departamento vendido",
+                "value" : {
+                  "error" : "DEPARTAMENTO_NO_DISPONIBLE",
+                  "message" : "El departamento ya no está disponible y no recibe nuevas consultas",
+                  "path" : "/api/v1/departamentos/7/consultas",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "La operación entra en conflicto con el estado actual (ver `error`).",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "InternalError" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "inesperado" : {
+                "summary" : "Error inesperado",
+                "value" : {
+                  "error" : "INTERNAL_ERROR",
+                  "message" : "Ocurrió un error inesperado; si persiste, informá el requestId",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 500,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "Error inesperado. El mensaje es genérico; el `requestId` permite encontrar el detalle en los logs.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "NotFound" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "departamento" : {
+                "summary" : "Departamento inexistente",
+                "value" : {
+                  "error" : "NOT_FOUND",
+                  "message" : "No se encontró el departamento solicitado",
+                  "path" : "/api/v1/departamentos/999",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 404,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "El recurso no existe.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "PayloadTooLarge" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "imagen" : {
+                "summary" : "Imagen demasiado grande",
+                "value" : {
+                  "error" : "PAYLOAD_TOO_LARGE",
+                  "message" : "La imagen supera el tamaño máximo de 5 MB",
+                  "path" : "/api/v1/departamentos/7/imagenes",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 413,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "El archivo o el request supera el tamaño máximo.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "PreconditionFailed" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "version" : {
+                "summary" : "Versión desactualizada",
+                "value" : {
+                  "error" : "PRECONDITION_FAILED",
+                  "message" : "El recurso fue modificado desde la última lectura; recargalo y volvé a intentar",
+                  "path" : "/api/v1/departamentos/7",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 412,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "`If-Match` no coincide con la versión actual: otro usuario modificó el recurso desde la lectura. Volver a leerlo (GET) y reintentar.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "base" : {
+                "summary" : "Base de datos no disponible",
+                "value" : {
+                  "error" : "SERVICE_UNAVAILABLE",
+                  "message" : "El servicio no está disponible temporalmente; intentá nuevamente",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 503,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "storage" : {
+                "summary" : "Storage de imágenes no disponible",
+                "value" : {
+                  "error" : "STORAGE_UNAVAILABLE",
+                  "message" : "El servicio de imágenes no está disponible; intentá nuevamente en unos minutos",
+                  "path" : "/api/v1/departamentos/7/imagenes",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 503,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "Una dependencia necesaria no está disponible (base de datos o, al subir fotos, el storage). Reintentar más tarde.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType" : {
+        "content" : {
+          "application/json" : {
+            "examples" : {
+              "tipo" : {
+                "summary" : "Tipo de contenido no soportado",
+                "value" : {
+                  "error" : "UNSUPPORTED_MEDIA_TYPE",
+                  "message" : "Tipo de contenido no soportado",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 415,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              }
+            },
+            "schema" : {
+              "$ref" : "#/components/schemas/ApiError"
+            }
+          }
+        },
+        "description" : "`Content-Type` no admitido por el endpoint.",
+        "headers" : {
+          "X-Request-Id" : {
+            "description" : "Correlation ID del request (el recibido o uno generado)",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        }
+      }
+    },
+    "schemas" : {
+      "ApiError" : {
+        "description" : "Error de la API. Mismo esquema para toda respuesta 4xx/5xx; nunca contiene stack traces, SQL ni detalles de infraestructura.",
+        "properties" : {
+          "error" : {
+            "type" : "string",
+            "description" : "Código estable del error. Los clientes pueden depender de él; el mensaje es solo informativo.",
+            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
+          },
+          "fieldErrors" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string",
+              "description" : "Errores por campo (solo en errores de validación). La clave es la ruta del campo en el body o el nombre del parámetro; se omite si no hay.",
+              "example" : "{\"direccion.ciudad\":\"no debe estar vacío\"}"
+            },
+            "description" : "Errores por campo (solo en errores de validación). La clave es la ruta del campo en el body o el nombre del parámetro; se omite si no hay.",
+            "example" : {
+              "direccion.ciudad" : "no debe estar vacío"
+            }
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "Mensaje apto para mostrar al usuario",
+            "example" : "La solicitud contiene datos inválidos"
+          },
+          "path" : {
+            "type" : "string",
+            "description" : "Path del request (sin query string)",
+            "example" : "/api/v1/departamentos"
+          },
+          "requestId" : {
+            "type" : "string",
+            "description" : "Correlation ID del request: permite encontrar el detalle en los logs",
+            "example" : "7f3c2a9e-req-42"
+          },
+          "status" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Status HTTP",
+            "example" : 400
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Momento del error (UTC)",
+            "example" : "2026-10-01T12:00:00Z"
+          }
+        },
+        "required" : [ "error", "status", "timestamp" ]
+      },
+      "AutocompleteResponse" : {
+        "type" : "object",
+        "description" : "Resultado del autocompletado. Si el proveedor no está disponible: degradado = true, sin sugerencias y con un mensaje para cargar la dirección a mano.",
+        "properties" : {
+          "degradado" : {
+            "type" : "boolean",
+            "description" : "true si el proveedor falló o su circuito está abierto",
+            "example" : false
+          },
+          "mensaje" : {
+            "type" : "string",
+            "description" : "Mensaje para el usuario cuando degradado = true; se omite si no",
+            "example" : "El autocompletado de direcciones no está disponible en este momento; ingresá la dirección manualmente."
+          },
+          "proveedor" : {
+            "type" : "string",
+            "description" : "Proveedor usado: stub (catálogo local) o georef (API externa)",
+            "example" : "georef"
+          },
+          "sugerencias" : {
+            "type" : "array",
+            "description" : "Sugerencias, de la más a la menos relevante",
+            "items" : {
+              "$ref" : "#/components/schemas/SugerenciaDireccion"
+            }
+          }
+        },
+        "required" : [ "degradado", "proveedor", "sugerencias" ]
+      },
+      "ConsultaCreatedResponse" : {
+        "type" : "object",
+        "description" : "Consulta registrada. No devuelve los datos personales enviados.",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Fecha de la consulta (UTC)",
+            "example" : "2026-10-01T12:00:00Z"
+          },
+          "departamentoId" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "ID del departamento consultado",
+            "example" : 1
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "ID de la consulta",
+            "example" : 42
+          }
+        },
+        "required" : [ "createdAt", "departamentoId", "id" ]
+      },
+      "ConsultaRequest" : {
+        "type" : "object",
+        "description" : "Consulta de un interesado. Los datos personales no se registran en logs.",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "format" : "email",
+            "description" : "Email de contacto",
+            "example" : "ana@example.com",
+            "maxLength" : 254,
+            "minLength" : 0
+          },
+          "mensaje" : {
+            "type" : "string",
+            "description" : "Mensaje",
+            "example" : "¿Se puede visitar el sábado por la mañana?",
+            "maxLength" : 2000,
+            "minLength" : 10
+          },
+          "nombre" : {
+            "type" : "string",
+            "description" : "Nombre de quien consulta",
+            "example" : "Ana Pérez",
+            "maxLength" : 100,
+            "minLength" : 0
+          },
+          "telefono" : {
+            "type" : "string",
+            "description" : "Teléfono de contacto (dígitos, espacios, +, -, paréntesis)",
+            "example" : "+54 11 5555-1234",
+            "maxLength" : 30,
+            "minLength" : 0,
+            "pattern" : "^[+0-9 ()\\-]{6,30}$"
+          }
+        },
+        "required" : [ "email", "mensaje", "nombre" ]
+      },
+      "DepartamentoDetailResponse" : {
+        "type" : "object",
+        "description" : "Departamento completo. La versión también viaja en el header ETag para editar con If-Match.",
+        "properties" : {
+          "ambientes" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Ambientes",
+            "example" : 3
+          },
+          "banos" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Baños",
+            "example" : 1
+          },
+          "cantidadConsultas" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Cantidad de consultas recibidas",
+            "example" : 3
+          },
+          "codigo" : {
+            "type" : "string",
+            "description" : "Código comercial legible, generado por el backend",
+            "example" : "DEP-7K3M9QX2"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Fecha de alta (UTC)",
+            "example" : "2026-10-01T12:00:00Z"
+          },
+          "descripcion" : {
+            "type" : "string",
+            "description" : "Descripción",
+            "example" : "Frente, piso alto, cocina integrada."
+          },
+          "direccion" : {
+            "$ref" : "#/components/schemas/DireccionResponse",
+            "description" : "Dirección"
+          },
+          "dormitorios" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Dormitorios",
+            "example" : 2
+          },
+          "estado" : {
+            "type" : "string",
+            "description" : "Estado comercial",
+            "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ],
+            "example" : "DISPONIBLE"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "ID interno",
+            "example" : 1
+          },
+          "imagenes" : {
+            "type" : "array",
+            "description" : "Fotos, ordenadas por posición (la primera es la principal)",
+            "items" : {
+              "$ref" : "#/components/schemas/ImagenResponse"
+            }
+          },
+          "moneda" : {
+            "type" : "string",
+            "description" : "Moneda del precio",
+            "enum" : [ "ARS", "USD" ],
+            "example" : "USD"
+          },
+          "precio" : {
+            "type" : "number",
+            "description" : "Precio",
+            "example" : 185000
+          },
+          "superficieM2" : {
+            "type" : "number",
+            "description" : "Superficie en m²",
+            "example" : 72.5
+          },
+          "titulo" : {
+            "type" : "string",
+            "description" : "Título",
+            "example" : "Luminoso 3 ambientes con balcón en Palermo"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Última modificación (UTC)",
+            "example" : "2026-10-01T12:00:00Z"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Versión para concurrencia optimista (la misma que el ETag)",
+            "example" : 0
+          }
+        },
+        "required" : [ "ambientes", "banos", "cantidadConsultas", "codigo", "createdAt", "direccion", "dormitorios", "estado", "id", "imagenes", "moneda", "precio", "superficieM2", "titulo", "updatedAt", "version" ]
+      },
+      "DepartamentoListItemResponse" : {
+        "type" : "object",
+        "description" : "Departamento en el listado: solo lo que muestra la tarjeta (sin descripción ni dirección completa).",
+        "properties" : {
+          "ambientes" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Ambientes",
+            "example" : 3
+          },
+          "banos" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Baños",
+            "example" : 1
+          },
+          "cantidadConsultas" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Cantidad de consultas recibidas",
+            "example" : 3
+          },
+          "cantidadImagenes" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Cantidad de fotos",
+            "example" : 2
+          },
+          "ciudad" : {
+            "type" : "string",
+            "description" : "Ciudad",
+            "example" : "Ciudad Autónoma de Buenos Aires"
+          },
+          "codigo" : {
+            "type" : "string",
+            "description" : "Código comercial legible, generado por el backend",
+            "example" : "DEP-7K3M9QX2"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Fecha de alta (UTC)",
+            "example" : "2026-10-01T12:00:00Z"
+          },
+          "dormitorios" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Dormitorios",
+            "example" : 2
+          },
+          "estado" : {
+            "type" : "string",
+            "description" : "Estado comercial",
+            "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ],
+            "example" : "DISPONIBLE"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "ID interno",
+            "example" : 1
+          },
+          "imagenPrincipalUrl" : {
+            "type" : "string",
+            "description" : "URL pública de la foto principal (la de menor posición); null si no tiene fotos",
+            "example" : "http://localhost:9000/lebane-images/departamentos/1/a.png"
+          },
+          "moneda" : {
+            "type" : "string",
+            "description" : "Moneda del precio",
+            "enum" : [ "ARS", "USD" ],
+            "example" : "USD"
+          },
+          "precio" : {
+            "type" : "number",
+            "description" : "Precio",
+            "example" : 185000
+          },
+          "provincia" : {
+            "type" : "string",
+            "description" : "Provincia",
+            "example" : "CABA"
+          },
+          "superficieM2" : {
+            "type" : "number",
+            "description" : "Superficie en m²",
+            "example" : 72.5
+          },
+          "titulo" : {
+            "type" : "string",
+            "description" : "Título",
+            "example" : "Luminoso 3 ambientes con balcón en Palermo"
+          }
+        },
+        "required" : [ "ambientes", "banos", "cantidadConsultas", "cantidadImagenes", "ciudad", "codigo", "createdAt", "dormitorios", "estado", "id", "moneda", "precio", "provincia", "superficieM2", "titulo" ]
+      },
+      "DepartamentoRequest" : {
+        "type" : "object",
+        "description" : "Datos de un departamento para el alta o la edición (reemplazo completo). Regla adicional: dormitorios debe ser menor que ambientes.",
+        "properties" : {
+          "ambientes" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Cantidad de ambientes",
+            "example" : 3,
+            "maximum" : 20,
+            "minimum" : 1
+          },
+          "banos" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Cantidad de baños",
+            "example" : 1,
+            "maximum" : 10,
+            "minimum" : 1
+          },
+          "descripcion" : {
+            "type" : "string",
+            "description" : "Descripción libre",
+            "example" : "Frente, piso alto, cocina integrada.",
+            "maxLength" : 4000,
+            "minLength" : 0
+          },
+          "direccion" : {
+            "$ref" : "#/components/schemas/DireccionRequest",
+            "description" : "Dirección del departamento"
+          },
+          "dormitorios" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Cantidad de dormitorios: menor que ambientes (monoambiente: 0)",
+            "example" : 2,
+            "maximum" : 19,
+            "minimum" : 0
+          },
+          "estado" : {
+            "type" : "string",
+            "description" : "Estado comercial. En el alta, si se omite, DISPONIBLE; en la edición, si se omite, se conserva el actual",
+            "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ],
+            "example" : "DISPONIBLE"
+          },
+          "moneda" : {
+            "type" : "string",
+            "description" : "Moneda del precio",
+            "enum" : [ "ARS", "USD" ],
+            "example" : "USD"
+          },
+          "precio" : {
+            "type" : "number",
+            "description" : "Precio de venta, en la moneda indicada (hasta 2 decimales)",
+            "example" : 185000
+          },
+          "superficieM2" : {
+            "type" : "number",
+            "description" : "Superficie total en m² (hasta 2 decimales)",
+            "example" : 72.5
+          },
+          "titulo" : {
+            "type" : "string",
+            "description" : "Título de la publicación",
+            "example" : "Luminoso 3 ambientes con balcón en Palermo",
+            "maxLength" : 120,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "ambientes", "banos", "direccion", "dormitorios", "moneda", "precio", "superficieM2", "titulo" ]
+      },
+      "DireccionRequest" : {
+        "type" : "object",
+        "description" : "Dirección. Latitud y longitud van juntas: ambas o ninguna.",
+        "properties" : {
+          "calle" : {
+            "type" : "string",
+            "description" : "Calle",
+            "example" : "Gorriti",
+            "maxLength" : 120,
+            "minLength" : 0
+          },
+          "ciudad" : {
+            "type" : "string",
+            "description" : "Ciudad o localidad",
+            "example" : "Ciudad Autónoma de Buenos Aires",
+            "maxLength" : 80,
+            "minLength" : 0
+          },
+          "codigoPostal" : {
+            "type" : "string",
+            "description" : "Código postal (letras, números y espacios)",
+            "example" : "C1414",
+            "maxLength" : 10,
+            "minLength" : 0,
+            "pattern" : "^[A-Za-z0-9 ]*$"
+          },
+          "latitud" : {
+            "type" : "number",
+            "description" : "Latitud (WGS84, hasta 6 decimales). Requiere longitud",
+            "example" : -34.5889,
+            "maximum" : 90,
+            "minimum" : -90
+          },
+          "longitud" : {
+            "type" : "number",
+            "description" : "Longitud (WGS84, hasta 6 decimales). Requiere latitud",
+            "example" : -58.4301,
+            "maximum" : 180,
+            "minimum" : -180
+          },
+          "numero" : {
+            "type" : "string",
+            "description" : "Altura",
+            "example" : "4850",
+            "maxLength" : 10,
+            "minLength" : 0
+          },
+          "piso" : {
+            "type" : "string",
+            "description" : "Piso",
+            "example" : "7",
+            "maxLength" : 10,
+            "minLength" : 0
+          },
+          "placeId" : {
+            "type" : "string",
+            "description" : "Identificador de la sugerencia del autocompletado de la que proviene la dirección, si se eligió una",
+            "example" : "georef:0209801005940:4850",
+            "maxLength" : 200,
+            "minLength" : 0
+          },
+          "provincia" : {
+            "type" : "string",
+            "description" : "Provincia",
+            "example" : "CABA",
+            "maxLength" : 80,
+            "minLength" : 0
+          },
+          "unidad" : {
+            "type" : "string",
+            "description" : "Unidad o departamento",
+            "example" : "B",
+            "maxLength" : 10,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "calle", "ciudad", "numero", "provincia" ]
+      },
+      "DireccionResponse" : {
+        "type" : "object",
+        "description" : "Dirección del departamento.",
+        "properties" : {
+          "calle" : {
+            "type" : "string",
+            "description" : "Calle",
+            "example" : "Gorriti"
+          },
+          "ciudad" : {
+            "type" : "string",
+            "description" : "Ciudad o localidad",
+            "example" : "Ciudad Autónoma de Buenos Aires"
+          },
+          "codigoPostal" : {
+            "type" : "string",
+            "description" : "Código postal",
+            "example" : "C1414"
+          },
+          "latitud" : {
+            "type" : "number",
+            "description" : "Latitud (WGS84)",
+            "example" : -34.5889
+          },
+          "longitud" : {
+            "type" : "number",
+            "description" : "Longitud (WGS84)",
+            "example" : -58.4301
+          },
+          "numero" : {
+            "type" : "string",
+            "description" : "Altura",
+            "example" : "4850"
+          },
+          "piso" : {
+            "type" : "string",
+            "description" : "Piso",
+            "example" : "7"
+          },
+          "placeId" : {
+            "type" : "string",
+            "description" : "Identificador de la sugerencia de autocompletado de la que proviene",
+            "example" : "georef:0209801005940:4850"
+          },
+          "provincia" : {
+            "type" : "string",
+            "description" : "Provincia",
+            "example" : "CABA"
+          },
+          "unidad" : {
+            "type" : "string",
+            "description" : "Unidad o departamento",
+            "example" : "B"
+          }
+        },
+        "required" : [ "calle", "ciudad", "numero", "provincia" ]
+      },
+      "ImagenResponse" : {
+        "type" : "object",
+        "description" : "Foto de un departamento.",
+        "properties" : {
+          "contentType" : {
+            "type" : "string",
+            "description" : "Tipo real, detectado por el contenido del archivo",
+            "example" : "image/png"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "ID de la foto",
+            "example" : 19
+          },
+          "posicion" : {
+            "type" : "integer",
+            "format" : "int32",
+            "description" : "Posición (0 = principal)",
+            "example" : 0
+          },
+          "sizeBytes" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Tamaño en bytes",
+            "example" : 204800
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "URL pública (lectura directa desde MinIO)",
+            "example" : "http://localhost:9000/lebane-images/departamentos/1/80d7c1e2.png"
+          }
+        },
+        "required" : [ "contentType", "id", "posicion", "sizeBytes", "url" ]
+      },
+      "PageMetadata" : {
+        "type" : "object",
+        "description" : "Datos de paginación",
+        "properties" : {
+          "number" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Número de página (desde 0)"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Tamaño de página pedido"
+          },
+          "totalElements" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Total de resultados que cumplen los filtros"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Total de páginas"
+          }
+        }
+      },
+      "PagedModelDepartamentoListItemResponse" : {
+        "type" : "object",
+        "description" : "Página de resultados (formato estándar de Spring Data)",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "description" : "Resultados de la página, en el orden pedido",
+            "items" : {
+              "$ref" : "#/components/schemas/DepartamentoListItemResponse"
+            }
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "SugerenciaDireccion" : {
+        "type" : "object",
+        "description" : "Dirección sugerida, lista para completar el formulario.",
+        "properties" : {
+          "calle" : {
+            "type" : "string",
+            "description" : "Calle",
+            "example" : "Av. Del Libertador"
+          },
+          "ciudad" : {
+            "type" : "string",
+            "description" : "Ciudad o localidad",
+            "example" : "Ciudad Autónoma de Buenos Aires"
+          },
+          "descripcion" : {
+            "type" : "string",
+            "description" : "Texto para mostrar en la lista",
+            "example" : "AV. DEL LIBERTADOR 4850, Comuna 14, CABA"
+          },
+          "latitud" : {
+            "type" : "number",
+            "description" : "Latitud (WGS84)",
+            "example" : -34.590347
+          },
+          "longitud" : {
+            "type" : "number",
+            "description" : "Longitud (WGS84)",
+            "example" : -58.429718
+          },
+          "numero" : {
+            "type" : "string",
+            "description" : "Altura, si la búsqueda la incluía",
+            "example" : "4850"
+          },
+          "placeId" : {
+            "type" : "string",
+            "description" : "Identificador de la sugerencia en el proveedor",
+            "example" : "georef:0209801005940:4850"
+          },
+          "provincia" : {
+            "type" : "string",
+            "description" : "Provincia",
+            "example" : "Ciudad Autónoma de Buenos Aires"
+          }
+        },
+        "required" : [ "calle", "ciudad", "descripcion", "placeId", "provincia" ]
+      }
+    }
+  }
+}

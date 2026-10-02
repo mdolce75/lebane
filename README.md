@@ -285,6 +285,18 @@ Consultas útiles en Kibana (KQL):
 API REST versionada bajo `/api/v1`. JSON en request y response. En Docker el navegador la consume vía el proxy del
 frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://localhost:8080/api/...`.
 
+**Documentación OpenAPI 3.1** (springdoc, generada desde el código):
+
+- Swagger UI para explorar y probar la API: http://localhost:8080/swagger-ui.html
+- Spec en JSON: http://localhost:8080/v3/api-docs; versionado en [`docs/openapi.json`](docs/openapi.json)
+- Cada operación documenta parámetros, headers (`X-Request-Id`, `ETag`, `If-Match`, `Location`) y solo las
+  respuestas que realmente puede devolver. Los errores usan el esquema `ApiError`, con ejemplos que traen los
+  mensajes reales.
+- `OpenApiSpecTest` falla si la API cambia y `docs/openapi.json` no, o si una operación, un parámetro o una
+  propiedad queda sin documentar. Para regenerar el spec:
+  `./mvnw test -Dtest=OpenApiSpecTest -Dopenapi.update=true`.
+- `OPENAPI_ENABLED=false` apaga el spec y Swagger UI (por ejemplo, en producción si no deben ser públicos).
+
 | Método | Ruta | Descripción | Respuestas |
 |---|---|---|---|
 | `GET` | `/api/v1/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
