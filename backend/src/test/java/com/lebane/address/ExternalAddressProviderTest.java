@@ -26,6 +26,10 @@ import com.lebane.resilience.TransientFailurePredicate;
 /** Cliente Georef real contra un servidor HTTP local: mapeo, headers y clasificación de errores. */
 class ExternalAddressProviderTest {
 
+    // Holgado: el primer request de la JVM (inicialización del HttpClient, agente de cobertura) puede tardar
+    // cientos de ms en una máquina cargada; con 500 ms el test fallaba de forma intermitente.
+    private static final Duration TIMEOUT = Duration.ofSeconds(2);
+
     private static FakeGeorefServer server;
     private ExternalAddressProvider provider;
     private final TransientFailurePredicate transientFailure = new TransientFailurePredicate();
@@ -44,7 +48,7 @@ class ExternalAddressProviderTest {
     void setUp() {
         server.reset();
         AddressProperties properties = new AddressProperties("external", server.url(), null,
-                Duration.ofMillis(500), 5);
+                TIMEOUT, 5);
         provider = new ExternalAddressProvider(new GeorefClient(RestClient.builder(), properties));
     }
 
@@ -104,7 +108,7 @@ class ExternalAddressProviderTest {
 
     @Test
     void slowResponsesTimeOutAsTransientFailures() {
-        server.respondSlowly(2_000);
+        server.respondSlowly(TIMEOUT.multipliedBy(3).toMillis());
 
         assertThatThrownBy(() -> provider.buscar("Gorriti", 5))
                 .isInstanceOf(AddressProviderTransientException.class);
