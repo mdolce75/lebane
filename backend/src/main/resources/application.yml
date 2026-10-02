@@ -201,8 +201,9 @@ management:
       enabled: false
     build:
       enabled: true
+    # /actuator/info es público: la versión exacta de la JVM ayudaría a buscar vulnerabilidades conocidas.
     java:
-      enabled: true
+      enabled: false
   metrics:
     tags:
       application: ${spring.application.name}
@@ -228,3 +229,9 @@ logging:
     # Evita ruido y posibles parámetros SQL en logs.
     org.hibernate.SQL: WARN
     org.hibernate.orm.jdbc.bind: WARN
+    # Cada excepción se registra una sola vez, en GlobalExceptionHandler. SqlExceptionHelper la repetía (WARN + ERROR
+    # por request) con el mensaje de PostgreSQL, que en una violación de unicidad incluye los valores de la fila.
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: "OFF"
+    # Con la base caída, cada probe de readiness registraba un WARN con stack trace completo (~5 KB cada 10-30 s).
+    # La caída sigue visible: readiness 503, WARN "Database unavailable" por request, avisos de Hikari y métricas.
+    org.springframework.boot.actuate.jdbc.DataSourceHealthIndicator: ERROR

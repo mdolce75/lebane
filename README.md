@@ -4,7 +4,7 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fases 1 a 6 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
+> **Estado:** Fases 1 a 7 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
 > logging JSON, correlation ID, Docker Compose y perfil ELK. Fase 2: modelo de datos, migraciones Flyway, API de
 > alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Fase 3: listado
 > paginado con Specifications y Criteria API, agregados en PostgreSQL, índices y validación sin full scans ni N+1
@@ -12,7 +12,8 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 > con métricas y logs. Fase 4.1: validación de logging y observabilidad (ELK con plantilla, retención y data view
 > automáticos; correlación requestId/traceId de punta a punta). Fase 5: frontend completo (listado, alta, detalle,
 > edición, fotos, autocompletado y consultas). Fase 6: suite completa con cobertura medida (JaCoCo y v8) y E2E con
-> Playwright contra el stack real. Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
+> Playwright contra el stack real. Fase 7: validación final de punta a punta (ver [Validación final](#validación-final)).
+> Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -21,6 +22,7 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 - [Arquitectura](#arquitectura)
 - [Modelo de datos](#modelo-de-datos)
 - [Requisitos](#requisitos)
+- [Instalación local](#instalación-local)
 - [Variables de entorno](#variables-de-entorno)
 - [Ejecución con Docker Compose](#ejecución-con-docker-compose)
 - [Ejecución sin Docker](#ejecución-sin-docker)
@@ -39,6 +41,7 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 - [Correlation ID](#correlation-id)
 - [Política de datos sensibles](#política-de-datos-sensibles)
 - [Tests](#tests)
+- [Validación final](#validación-final)
 - [Decisiones técnicas](#decisiones-técnicas)
 - [Estado por fase](#estado-por-fase)
 - [Limitaciones conocidas](#limitaciones-conocidas)
@@ -123,8 +126,22 @@ departamento 1 ──── 0..N consulta    (FK consulta.departamento_id, @Many
 |---|---|---|
 | Docker + Docker Compose v2 | 24+ | Ejecución completa y tests de integración (Testcontainers) |
 | JDK | 21 | Backend sin Docker |
-| Maven | 3.9+ (o el Maven incluido en IntelliJ) | Build/tests del backend |
-| Node.js | 20.19+ o 22 | Frontend sin Docker |
+| Maven | no hace falta: `backend/mvnw` (Maven Wrapper 3.9.11) | Build/tests del backend |
+| Node.js | 20.19+ o 22 | Frontend sin Docker, tests y E2E |
+| Google Chrome | cualquiera reciente | Solo para los E2E (`npm run e2e`) |
+
+## Instalación local
+
+```bash
+git clone https://github.com/mdolce75/lebane.git && cd lebane
+cp .env.example .env      # reemplazar cada change-me por un valor propio (contraseñas de PostgreSQL, MinIO,
+                          # Actuator y, si se usa el perfil observability, de Elasticsearch/Kibana)
+docker compose up -d --build
+```
+
+Con eso queda todo funcionando en http://localhost:3000 (con datos de ejemplo, `SEED_ENABLED=true`). Para
+desarrollar sin Docker, ver [Ejecución sin Docker](#ejecución-sin-docker); para los tests, `cd backend && ./mvnw
+verify` (requiere Docker para Testcontainers) y `cd frontend && npm ci && npm test`.
 
 ## Variables de entorno
 
@@ -161,6 +178,7 @@ Toda la configuración proviene de variables de entorno. `cp .env.example .env` 
 | `VITE_API_BASE_URL` | `/api` | Base de la API vista por el navegador (build time, no secretos). |
 | `BACKEND_UPSTREAM` | `http://backend:8080` | Upstream de nginx (red interna Docker). |
 | `NGINX_RESOLVER` | `127.0.0.11` | DNS que usa nginx para re-resolver el upstream (DNS embebido de Docker). |
+| `IMAGES_ORIGIN` (frontend) | `STORAGE_PUBLIC_URL` | Origen de las fotos permitido en la `Content-Security-Policy`; Compose lo deriva de `STORAGE_PUBLIC_URL`. |
 | `ELASTIC_VERSION` / `ELASTIC_PASSWORD` / `KIBANA_SYSTEM_PASSWORD` / `KIBANA_ENCRYPTION_KEY` | ver `.env.example` | Perfil de observabilidad. |
 | `*_HOST_PORT` | ver `.env.example` | Puertos publicados en el host. |
 
@@ -175,8 +193,8 @@ docker compose ps             # esperar a que backend y frontend estén "healthy
 | Servicio | URL | Notas |
 |---|---|---|
 | Frontend | http://localhost:3000 | nginx; hace proxy de `/api` y `/actuator/health*` al backend |
-| Backend | http://localhost:8080 | API + Actuator |
-| MinIO API | http://localhost:9000 | URLs públicas de imágenes (bucket `lebane-images`, lectura anónima) |
+| Backend | http://127.0.0.1:8080 | API + Actuator. Solo localhost |
+| MinIO API | http://127.0.0.1:9000 | URLs públicas de imágenes (bucket `lebane-images`, lectura anónima). Solo localhost |
 | MinIO consola | http://127.0.0.1:9001 | Solo localhost |
 | PostgreSQL | 127.0.0.1:5432 | Solo localhost |
 
@@ -185,6 +203,10 @@ Healthchecks: PostgreSQL (`pg_isready`), MinIO (`mc ready local`), backend (`wge
 `backend` espera a `postgres` y `minio` sanos; `frontend` espera a `backend` sano.
 
 Logs de contenedores: driver `json-file` con rotación (`max-size: 10m`, `max-file: 5`).
+
+**Puertos**: solo el frontend escucha en todas las interfaces; backend, MinIO, PostgreSQL y el perfil de
+observabilidad se publican únicamente en `127.0.0.1`. Así el backend no queda accesible desde la red sin pasar por
+nginx. Para servir la aplicación a otras máquinas hay que publicar MinIO (o un CDN) y ajustar `STORAGE_PUBLIC_URL`.
 
 ## Ejecución sin Docker
 
@@ -200,7 +222,7 @@ export ACTUATOR_PASSWORD=<algo> LOG_FORMAT=text
 
 # Frontend (otra terminal) — vite redirige /api y /actuator/health a localhost:8080
 cd frontend
-npm install
+npm ci
 npm run dev        # http://localhost:5173
 ```
 
@@ -248,8 +270,9 @@ Consultas útiles en Kibana (KQL):
 
 - Volúmenes persistentes: `elasticsearch-data`, `logstash-data`, `kibana-data`.
 - El backend **no depende** de estos servicios: no están en `depends_on` ni en readiness. Con Logstash caído, el
-  appender asíncrono descarta eventos (nunca bloquea requests: 20.000 eventos en < 3 s sin destino, probado),
-  reintenta conectar cada 10 s, avisa una vez con un evento JSON (`Logback internal status`) y, al apagar, espera
+  appender asíncrono retiene los eventos en su buffer en memoria (8.192) y los envía al reconectar; si el buffer se
+  llena, descarta los nuevos en lugar de esperar (nunca bloquea requests: 20.000 eventos en < 3 s sin destino,
+  probado). Reintenta conectar cada 10 s, avisa una vez con un evento JSON (`Logback internal status`) y, al apagar, espera
   como máximo 5 s para vaciar su buffer (el default de la librería es 1 minuto). stdout siempre recibe todo.
 - Con `LOGSTASH_ENABLED=false` el appender TCP **no se crea**: ninguna conexión ni evento hacia Logstash, aunque
   esté levantado.
@@ -800,7 +823,14 @@ el requestId como "código de seguimiento".
   la respuesta del alta y los `toString()` de la entidad y del DTO los omiten.
 - Errores HTTP sin stack traces, SQL, nombres de constraints ni detalles de infraestructura (`GlobalExceptionHandler`,
   `ApiErrorController` y `server.error.include-*: never`).
-- Actuator sin detalles de health; endpoints sensibles no expuestos.
+- Actuator sin detalles de health; endpoints sensibles no expuestos; `/actuator/info` (público) solo con datos del
+  build, sin la versión de la JVM.
+- Hibernate no registra los mensajes de PostgreSQL (`SqlExceptionHelper` deshabilitado): en una violación de
+  unicidad incluyen los valores de la fila. El handler global registra solo el nombre de la constraint.
+- nginx agrega `Content-Security-Policy` estricta (sin scripts ni estilos inline; imágenes solo del propio origen,
+  `blob:` y MinIO), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` y `Referrer-Policy` en todas las
+  respuestas, una sola vez (oculta los del backend en las respuestas proxeadas). Los E2E fallan ante cualquier
+  violación de CSP.
 - Secretos solo por variables de entorno; `.env` ignorado por Git.
 
 ## Tests
@@ -908,6 +938,44 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/READ
 | Frontend `uploadSequentially.test.ts`, `RouteErrorBoundary.test.tsx` | subida de a una sin concurrencia, errores por foto con requestId; error de render sin detalles técnicos |
 | E2E `departamentos.e2e.ts` | ver [E2E](#e2e-playwright) |
 
+## Validación final
+
+Fase 7, sobre el stack Docker reconstruido desde cero (`docker compose down` + `up -d --build`), además de la
+compilación limpia y todas las suites:
+
+| Verificación | Resultado |
+|---|---|
+| `./mvnw clean verify` | BUILD SUCCESS, 0 warnings; 209 unitarios + 43 IT |
+| Frontend | lint, typecheck, 99 tests y build OK; 7/7 E2E contra el stack, con control de violaciones de CSP |
+| Docker Compose sin perfil / con `--profile observability` | todos los servicios `healthy`; `elasticsearch-setup` y `kibana-setup` terminan con código 0 |
+| Probes (directo y vía nginx) | health, liveness y readiness `200 {"status":"UP"}` en ~25 ms, sin detalles |
+| PostgreSQL detenido | liveness **200**; readiness, health y API **503** (`SERVICE_UNAVAILABLE`, sin detalles) en ~3 s; vuelve a 200 solo al levantarlo |
+| Exposición de Actuator | info público; metrics/prometheus/actuator 401 sin credenciales o con credenciales incorrectas; env, beans, heapdump, configprops, loggers, threaddump y shutdown 404; nginx solo deja pasar health |
+| Endpoints | alta 201 con `Location` y `ETag`; detalle; `PUT` con `If-Match` viejo 412 y correcto 200; consulta 201; 404; validaciones 400 por campo; JSON inválido 400 |
+| Paginación y filtros | totales y páginas correctos; `size>100`, página fuera de la ventana y `sort` no permitido 400; filtros por estado, moneda, precio, ambientes, fotos y texto verificados sobre cada resultado; orden correcto; `%` escapado |
+| MinIO | subida 201 y lectura pública 200; archivo falso 400; 6ª foto 409; 6 MB 413; borrado 204 y objeto 404 |
+| MinIO detenido | subidas 503 `STORAGE_UNAVAILABLE` con 3 intentos; el circuito se abre y rechaza en ~20 ms; listado, detalle y readiness 200; recuperación por `HALF_OPEN` |
+| Proveedor de direcciones inalcanzable | TimeLimiter de 2 s, 2 intentos, circuito abierto y respuestas degradadas (200, `degradado=true`) en ~15 ms; listado y readiness sin impacto |
+| Logstash detenido | latencia del listado sin cambios (p95 70 ms con y sin Logstash); readiness 200; stdout 100 % JSON; un único aviso JSON; eventos de la caída enviados al reconectar |
+| Logs | 100 % JSON, campos obligatorios en todos los eventos, `requestId` en todo el access log y en cada evento de request (los únicos sin requestId son del arranque); ningún secreto del `.env` presente, en stdout ni en Elasticsearch |
+| Trazabilidad de fallos externos | cada timeout, reintento, apertura de circuito, rechazo y fallback lleva `requestId`, `circuitBreaker`, `provider` y `cause` |
+| `EXPLAIN (ANALYZE)` con 100k departamentos | 12 consultas, **0 `Seq Scan`**, de 0,07 a 22 ms (base descartable, eliminada al terminar) |
+| N+1 / EAGER / `findAll` | ninguna relación EAGER, ningún `findAll` en el código, sentencias fijas por request (cubierto por `DepartamentoApiIT`, `ListadoIT` y `ListadoPerformanceIT`) |
+| CORS | origen permitido 200 con `Access-Control-Allow-Origin`; origen no permitido 403 |
+| Código | sin TODO/FIXME, sin prints de depuración, sin clases ni módulos sin uso |
+
+**Corregido durante la validación**
+
+- `/actuator/info` (público) exponía la versión exacta de la JVM: se deshabilitó el contribuidor `java`.
+- Backend y API de MinIO publicados en todas las interfaces: ahora solo en `127.0.0.1`.
+- Con la base caída, cada probe de readiness registraba un WARN con stack trace de ~5 KB, y Hibernate repetía cada
+  error de base con WARN + 2 ERROR por request: ahora queda un único WARN por request fallido.
+- nginx no enviaba `Referrer-Policy` en la aplicación ni `X-Frame-Options` en los assets (un `add_header` en un
+  `location` anula los del `server`), y duplicaba los headers de seguridad en las respuestas de la API. Se agregó
+  además la CSP.
+- El README afirmaba que con Logstash caído los eventos se descartaban; en realidad se retienen y se envían al
+  reconectar (hasta llenar el buffer).
+
 ## Decisiones técnicas
 
 - **Spring Boot 3.5.x + Java 21**, virtual threads habilitados (`spring.threads.virtual.enabled`).
@@ -973,6 +1041,8 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/READ
   copiar el nuevo digest.
 - **Testcontainers 1.21.4** (sobrescribe la 1.21.3 de Boot 3.5.7): la anterior no es compatible con Docker
   Engine 29+, que exige API ≥ 1.44.
+- **CSP en nginx y no en el backend**: es quien sirve el HTML; el origen de las fotos llega por variable de entorno
+  (`IMAGES_ORIGIN`), así la política sigue a `STORAGE_PUBLIC_URL` sin reconstruir la imagen.
 - **Healthcheck del frontend contra `127.0.0.1`**: dentro del contenedor `localhost` resuelve primero a `::1` y
   nginx escucha solo en IPv4.
 
@@ -987,7 +1057,7 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/READ
 | 4.1 Logging y observabilidad (validación) | **Completa y verificada** (187 tests unitarios + 41 IT backend; en Docker: ELK con plantilla, ILM y data view automáticos, búsqueda por `requestId`/`traceId`/campos de resiliencia, ID generado por nginx, Logstash habilitado y deshabilitado, sin secretos indexados) |
 | 5. Frontend | **Completa y verificada** (77 tests frontend; typecheck, lint y build; recorrido completo en el navegador contra el stack Docker) |
 | 6. Tests completos | **Completa y verificada** (252 (209 + 43) tests backend, 99 frontend y 7 E2E con Playwright contra el stack Docker; cobertura backend 92,5 % de líneas, frontend 96,5 %; dos tests intermitentes corregidos) |
-| 7. Validación final | Pendiente |
+| 7. Validación final | **Completa y verificada** (compilación limpia sin warnings, todas las suites, stack con y sin observabilidad, caídas de PostgreSQL, MinIO, Georef y Logstash, EXPLAIN con 100k filas, auditoría de logs y seguridad; 5 problemas corregidos, ver [Validación final](#validación-final)) |
 
 ## Limitaciones conocidas
 
@@ -995,8 +1065,9 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/READ
   Boot con grupos de health y solo expone nombres, no detalles. Liveness y readiness devuelven exactamente
   `{"status":"UP"}`.
 - Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
-  appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos generados durante la
-  caída se descartan (buffer en memoria, sin bloquear requests).
+  appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos de la caída se
+  retienen en memoria y se envían al reconectar (validado: 50 de 50); los que excedan el buffer (8.192) o los
+  pendientes si el backend se reinicia durante la caída se pierden en Logstash, pero siempre quedan en stdout.
 - Los E2E crean datos reales en la base contra la que corren (con prefijo `E2E…`): la API no permite borrar
   departamentos. Conviene correrlos contra un entorno de desarrollo o de pruebas, no contra uno con datos reales.
 - Las URLs mal formadas (`%` suelto, `%2F` codificado) las rechaza Tomcat antes de llegar a la aplicación, con su
