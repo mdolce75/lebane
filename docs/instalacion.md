@@ -185,4 +185,8 @@ departamentos ficticios en distintas ciudades y estados, con consultas de ejempl
 - No depende de servicios externos reales. Fotos: se generan en memoria (PNG sintéticos) y se suben con el mismo
   servicio que la API (0 a 3 por departamento; los que no tienen muestran el placeholder). Solo a departamentos
   `SEED-` sin fotos; si MinIO no está disponible se omiten (WARN) y se completan en el próximo arranque.
-- Los datos pasan las mismas validaciones que la API (`SeedDataTest`).
+- **Consultas de ejemplo**: además de las consultas originales, cada aviso recibe de 3 a 8 consultas generadas
+  (`SeedConsultas`): nombres, mensajes y teléfonos variados, emails en `example.com`. Son determinísticas y se
+  identifican por su email (`nombre.apellido.s0001-03@example.com`), así que el seeder agrega solo las que faltan:
+  también completa bases creadas con un seed anterior, reiniciar no las duplica y nunca toca consultas reales.
+- Los datos pasan las mismas validaciones que la API (`SeedDataTest`, `SeedConsultasTest`).
