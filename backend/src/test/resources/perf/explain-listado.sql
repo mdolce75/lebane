@@ -1,5 +1,5 @@
 -- EXPLAIN (ANALYZE, BUFFERS) de las consultas del listado, tal como las genera la aplicación (SQL de Hibernate con
--- los parámetros como literales). Requiere psql (usa \gset) y los datos de datos-volumen.sql. Ver README,
+-- los parámetros como literales). Requiere psql (usa \gset) y los datos de datos-volumen.sql. Ver docs/api.md,
 -- "Validación de performance", para el procedimiento completo en una base descartable.
 \pset pager off
 \echo '=== 1. Página por defecto (created_at DESC, id DESC), página 0 de 20'

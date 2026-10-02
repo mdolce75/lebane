@@ -1,7 +1,7 @@
 # lebane-frontend
 
 Panel de administración de Lebane — React 19 · TypeScript · Vite · TanStack Query · React Hook Form · Zod ·
-React Router. Documentación completa (pantallas, decisiones y validación) en el [README raíz](../README.md#frontend).
+React Router. Documentación completa (pantallas, decisiones y validación) en [docs/arquitectura.md](../docs/arquitectura.md#frontend).
 
 ## Comandos
 

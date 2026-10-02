@@ -5,7 +5,7 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * MinIO para tests de integración, con la misma imagen que {@code docker-compose.yml} (las imágenes oficiales
- * {@code minio/minio} ya no se pueden descargar; ver README). Es compatible con el módulo de Testcontainers.
+ * {@code minio/minio} ya no se pueden descargar; ver docs/decisiones.md). Es compatible con el módulo de Testcontainers.
  */
 public final class MinioContainers {
 
