@@ -202,4 +202,23 @@ class DepartamentoApiIT {
         }
         return new HttpEntity<>(body, headers);
     }
+
+    /**
+     * Un request que rechaza el firewall de Spring Security (antes de Spring MVC) también responde con
+     * {@code ApiError} en JSON, con el path original y el requestId del cliente: lo resuelve {@code ApiErrorController}.
+     */
+    @Test
+    void requestsRejectedBeforeSpringMvcStillGetAnApiError() throws Exception {
+        ResponseEntity<String> response = rest.exchange(org.springframework.http.RequestEntity
+                .get(java.net.URI.create(rest.getRootUri() + BASE + ";x=1/1"))
+                .header("X-Request-Id", "it-firewall-1").build(), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
+        JsonNode error = objectMapper.readTree(response.getBody());
+        assertThat(error.path("error").asText()).isEqualTo("BAD_REQUEST");
+        assertThat(error.path("path").asText()).isEqualTo(BASE + ";x=1/1");
+        assertThat(error.path("requestId").asText()).isEqualTo("it-firewall-1");
+        assertThat(response.getBody()).doesNotContain("Firewall", "Exception", "semicolon");
+    }
 }
