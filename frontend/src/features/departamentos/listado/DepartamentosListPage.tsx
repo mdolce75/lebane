@@ -17,7 +17,11 @@ export function DepartamentosListPage() {
   return (
     <section>
       <div className="page-header">
-        <h1>Departamentos</h1>
+        <div>
+          <span className="eyebrow">Panel de ventas</span>
+          <h1>Departamentos</h1>
+          <p className="page-header__lead">Publicaciones, fotos y consultas de tus unidades en un solo lugar.</p>
+        </div>
         <Link to="/departamentos/nuevo" className="button">Nuevo departamento</Link>
       </div>
 
