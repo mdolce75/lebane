@@ -1,22 +1,47 @@
-# Actualizaciones de dependencias: un PR semanal por ecosistema, con las versiones menores y parches agrupados
-# (las mayores llegan por separado porque suelen requerir cambios). El CI valida cada PR.
+# Actualizaciones de dependencias: PRs semanales, validados por el CI.
+#
+# Política:
+# - Versiones menores y parches: agrupadas en un PR por ecosistema.
+# - Versiones mayores: llegan de a una, salvo las que requieren una migración planificada (abajo, con el motivo).
+#   Esas se ignoran para no generar PRs que el CI rechaza semana tras semana; la migración se hace a mano.
+# - Imágenes de Docker: se mantiene la versión del runtime del proyecto (Java 21, Node 22). Pasar a otra LTS
+#   (Java 25, Node 24) se hace a mano, junto con el JDK/Node del CI y del resto del proyecto.
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /backend
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
       maven-menores:
         update-types: [minor, patch]
+    ignore:
+      # Spring Boot 4 es una migración mayor (Spring Framework 7, Jakarta EE 11): se planifica aparte.
+      - dependency-name: org.springframework.boot:spring-boot-starter-parent
+        update-types: ["version-update:semver-major"]
+      # springdoc 3.x requiere Spring Boot 4; la línea 2.8.x es la de Boot 3.
+      - dependency-name: org.springdoc:*
+        update-types: ["version-update:semver-major"]
+      # MinIO SDK 8.6+/9.x usa OkHttp 5 y Kotlin 2; Boot 3.5 gestiona Kotlin 1.9 (ver docs/decisiones.md).
+      - dependency-name: io.minio:minio
+        versions: [">= 8.6.0"]
+      # logstash-logback-encoder 9 cambia la API del encoder; se evalúa junto con la migración a Boot 4.
+      - dependency-name: net.logstash.logback:logstash-logback-encoder
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
       npm-menores:
         update-types: [minor, patch]
+    ignore:
+      # Vite 8 no pasa el CI (build/tests); requiere una migración propia.
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directories:
@@ -24,8 +49,21 @@ updates:
       - /frontend
     schedule:
       interval: weekly
+    ignore:
+      # Runtime de Java: se queda en 21, la versión con la que compila el proyecto (pom.xml y CI).
+      - dependency-name: eclipse-temurin
+        versions: [">= 22"]
+      # La imagen de build de Maven lleva la versión de Java en el tag (3.9-eclipse-temurin-21): Dependabot no
+      # distingue la de Maven de la de Java, así que se actualiza a mano junto con el JDK.
+      - dependency-name: maven
+      # Node: se queda en 22, la misma que usa el CI (setup-node).
+      - dependency-name: node
+        versions: [">= 23"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
