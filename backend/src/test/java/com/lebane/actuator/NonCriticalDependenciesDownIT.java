@@ -19,21 +19,23 @@ import com.lebane.support.PostgresContainer;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
+import net.logstash.logback.appender.LogstashTcpSocketAppender;
+import net.logstash.logback.encoder.LogstashEncoder;
 
 /**
  * Con PostgreSQL disponible y <b>todas</b> las dependencias no críticas caídas a la vez (MinIO, proveedor externo de
- * direcciones y Logstash habilitado pero inalcanzable), la instancia sigue viva y lista: liveness y readiness
- * responden 200 {@code {"status":"UP"}} enseguida. Que esas dependencias estén realmente caídas se comprueba en el
- * mismo test (autocompletado degradado, appender de Logstash activo).
+ * direcciones y Logstash inalcanzable), la instancia sigue viva y lista: liveness, readiness y health responden 200
+ * {@code {"status":"UP"}} enseguida. Que esas dependencias estén realmente caídas se comprueba en el mismo test.
+ *
+ * <p>El appender de Logstash se agrega a mano (con la misma configuración no bloqueante que
+ * {@code logback-logstash-true.xml}): en una suite con varios contextos, Spring Boot no reinicializa Logback si ya
+ * lo configuró otro test, así que {@code lebane.logging.logstash.enabled=true} no tendría efecto acá.
  */
 @ImportTestcontainers(PostgresContainer.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         // MinIO: classpath:/config/application.properties ya lo apunta a 127.0.0.1:1 (conexión rechazada).
         "lebane.address.provider=external",
-        "lebane.address.url=http://127.0.0.1:1",
-        "lebane.logging.logstash.enabled=true",
-        "lebane.logging.logstash.host=127.0.0.1",
-        "lebane.logging.logstash.port=1"
+        "lebane.address.url=http://127.0.0.1:1"
 })
 class NonCriticalDependenciesDownIT {
 
@@ -47,23 +49,50 @@ class NonCriticalDependenciesDownIT {
 
     @Test
     void probesStayUpAndFastWhileNonCriticalDependenciesAreDown() throws Exception {
-        // Las dependencias no críticas están efectivamente caídas en este contexto.
-        assertThat(((LoggerContext) LoggerFactory.getILoggerFactory())
-                .getLogger(Logger.ROOT_LOGGER_NAME).getAppender("LOGSTASH")).isNotNull();
-        JsonNode autocompletado = mapper.readTree(
-                rest.getForObject("/api/v1/direcciones/autocompletar?q=Gorriti 4850", String.class));
-        assertThat(autocompletado.path("degradado").asBoolean()).isTrue();
+        Logger root = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(Logger.ROOT_LOGGER_NAME);
+        LogstashTcpSocketAppender logstash = unreachableLogstash(root.getLoggerContext());
+        root.addAppender(logstash);
+        try {
+            // Las dependencias no críticas están efectivamente caídas.
+            JsonNode autocompletado = mapper.readTree(
+                    rest.getForObject("/api/v1/direcciones/autocompletar?q=Gorriti 4850", String.class));
+            assertThat(autocompletado.path("degradado").asBoolean()).isTrue();
 
-        for (String probe : new String[] {"/actuator/health/liveness", "/actuator/health/readiness", "/actuator/health"}) {
-            long start = System.nanoTime();
-            ResponseEntity<String> response = rest.getForEntity(probe, String.class);
-            Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+            for (String probe : new String[] {"/actuator/health/liveness", "/actuator/health/readiness", "/actuator/health"}) {
+                long start = System.nanoTime();
+                ResponseEntity<String> response = rest.getForEntity(probe, String.class);
+                Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
 
-            assertThat(response.getStatusCode()).as(probe).isEqualTo(HttpStatus.OK);
-            assertThat(mapper.readTree(response.getBody()).path("status").asText()).as(probe).isEqualTo("UP");
-            assertThat(elapsed).as(probe + " no debe esperar a dependencias externas").isLessThan(PROBE_BUDGET);
+                assertThat(response.getStatusCode()).as(probe).isEqualTo(HttpStatus.OK);
+                assertThat(mapper.readTree(response.getBody()).path("status").asText()).as(probe).isEqualTo("UP");
+                assertThat(elapsed).as(probe + " no debe esperar a dependencias externas").isLessThan(PROBE_BUDGET);
+            }
+            assertThat(mapper.readTree(rest.getForObject("/actuator/health/readiness", String.class)))
+                    .isEqualTo(mapper.readTree("{\"status\":\"UP\"}"));
+            // Los eventos se generaron (requests, autocompletado degradado) pero nunca llegaron a Logstash.
+            assertThat(logstash.isStarted()).isTrue();
+            assertThat(logstash.getConnectedDestination()).isEmpty();
+        } finally {
+            root.detachAppender(logstash);
+            logstash.stop();
         }
-        assertThat(mapper.readTree(rest.getForObject("/actuator/health/readiness", String.class)))
-                .isEqualTo(mapper.readTree("{\"status\":\"UP\"}"));
+    }
+
+    private static LogstashTcpSocketAppender unreachableLogstash(LoggerContext context) {
+        LogstashEncoder encoder = new LogstashEncoder();
+        encoder.setContext(context);
+        encoder.setIncludeContext(false);
+        encoder.start();
+
+        LogstashTcpSocketAppender appender = new LogstashTcpSocketAppender();
+        appender.setContext(context);
+        appender.setName("LOGSTASH_TEST");
+        appender.addDestination("127.0.0.1:1");
+        appender.setConnectionTimeout(new ch.qos.logback.core.util.Duration(2_000));
+        appender.setAppendTimeout(new ch.qos.logback.core.util.Duration(0));
+        appender.setShutdownGracePeriod(new ch.qos.logback.core.util.Duration(1_000));
+        appender.setEncoder(encoder);
+        appender.start();
+        return appender;
     }
 }

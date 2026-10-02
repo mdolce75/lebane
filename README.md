@@ -4,14 +4,15 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fases 1 a 5 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
+> **Estado:** Fases 1 a 6 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
 > logging JSON, correlation ID, Docker Compose y perfil ELK. Fase 2: modelo de datos, migraciones Flyway, API de
 > alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Fase 3: listado
 > paginado con Specifications y Criteria API, agregados en PostgreSQL, índices y validación sin full scans ni N+1
 > con 100k departamentos. Fase 4: fotos en MinIO, autocompletado de direcciones (stub / API Georef) y Resilience4j
 > con métricas y logs. Fase 4.1: validación de logging y observabilidad (ELK con plantilla, retención y data view
 > automáticos; correlación requestId/traceId de punta a punta). Fase 5: frontend completo (listado, alta, detalle,
-> edición, fotos, autocompletado y consultas). Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
+> edición, fotos, autocompletado y consultas). Fase 6: suite completa con cobertura medida (JaCoCo y v8) y E2E con
+> Playwright contra el stack real. Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -821,8 +822,37 @@ cd backend && ./mvnw verify
 # Los *IT comparten un único contenedor PostgreSQL (support/PostgresContainer)
 
 # Frontend
-cd frontend && npm install && npm run typecheck && npm run lint && npm test && npm run build
+cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build
+
+# E2E en un navegador real contra el stack Docker (requiere `docker compose up -d --build`)
+cd frontend && npm run e2e
 ```
+
+### Cobertura
+
+```bash
+cd backend && ./mvnw verify            # JaCoCo: unitarios + integración -> backend/target/site/jacoco/index.html
+cd frontend && npm run test:coverage   # v8 -> frontend/coverage/index.html
+```
+
+| Suite | Tests | Líneas | Ramas |
+|---|---|---|---|
+| Backend (unitarios + IT) | 252 (209 + 43) | 92,5 % | 74,9 % |
+| Frontend (Vitest) | 99 | 96,5 % | 89,8 % |
+| E2E (Playwright, stack real) | 7 | — | — |
+
+La cobertura se mide y se publica, pero no se impone un umbral que haga fallar el build: un porcentaje mínimo
+empuja a escribir tests para subir el número y no para cubrir riesgos. Lo que queda sin cubrir en el backend es,
+sobre todo, `equals`/`hashCode` de entidades, ramas de logging en DEBUG y ramas defensivas de clientes externos.
+
+### E2E (Playwright)
+
+Siete escenarios en Chrome contra nginx + backend + PostgreSQL + MinIO reales, sin mocks: filtros y orden enviados
+al servidor con el estado en la URL (incluida la recarga), `X-Request-Id` enviado y devuelto, alta con una foto que
+se sube a MinIO y el navegador descarga y decodifica, rechazo de un archivo falso `.jpg` (en el navegador y en la
+API), consulta reflejada en el contador del listado, pantallas de no encontrado, y conflicto de edición 412 →
+recargar → guardar sin pisar el cambio ajeno. Usan el Chrome instalado (sin `npx playwright install`) y datos con
+un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/README.md#e2e-playwright).
 
 | Test | Verifica |
 |---|---|
@@ -870,6 +900,13 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | Frontend `httpClient.test.ts` | X-Request-Id, JSON/FormData, normalización de errores sin detalles internos, timeout, red |
 | Frontend `App.test.tsx` | routing, indicador de readiness (UP / 503), 404, política de reintentos |
 | Frontend `ErrorMessage.test.tsx`, `env.test.ts` | errores seguros con requestId, validación de configuración con Zod |
+| `GlobalExceptionHandlerTest` | multipart inválido, header faltante, JSON inválido vs ausente, 405 sin `Allow`, 406 sin cuerpo, 413, excepciones de Spring con status propio, 409 sin SQL ni constraint, 503 de base, 500 genérico |
+| `ApiErrorControllerTest` | errores fuera de Spring MVC (`/error`): código estable y mensaje seguro por status, path original, requestId, sin el mensaje de la excepción |
+| `DepartamentoApiIT` (firewall) | un request rechazado por el firewall de Spring Security responde `ApiError` JSON con el requestId del cliente |
+| `NonCriticalDependenciesDownIT` | MinIO, Georef y Logstash caídos a la vez: liveness, readiness y health 200 `UP` en menos de 1 s |
+| Frontend `apiSupport.test.ts` | política de reintentos (red, timeout, 5xx, 429 sí; 4xx, 501 y contrato inválido no; máximo), respuesta inválida sin detalles, UUID sin `crypto.randomUUID`, `fieldErrors` del servidor |
+| Frontend `uploadSequentially.test.ts`, `RouteErrorBoundary.test.tsx` | subida de a una sin concurrencia, errores por foto con requestId; error de render sin detalles técnicos |
+| E2E `departamentos.e2e.ts` | ver [E2E](#e2e-playwright) |
 
 ## Decisiones técnicas
 
@@ -889,6 +926,8 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
   mismas reglas que el backend; fotos de a una con estado propio (errores parciales manejables).
 - **Plantilla de índice explícita + `ignore_malformed`** en Elasticsearch en lugar del mapeo dinámico: filtros
   exactos sobre `keyword` y ningún evento rechazado por un tipo inesperado.
+- **E2E con el Chrome instalado** (`channel: 'chrome'`): evita descargar navegadores para correrlos localmente; en
+  CI se usa el Chromium de Playwright con `E2E_BROWSER_CHANNEL=chromium`.
 - **`shutdownGracePeriod` de 5 s** en el appender de Logstash: el default (1 minuto) demoraba el apagado con
   Logstash caído; lo detectó `LogstashAppenderTest`.
 - **Una foto por request**: errores parciales manejables (el cliente sabe qué foto falló) y compensación simple.
@@ -947,7 +986,7 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | 4. Storage, direcciones, resiliencia y métricas | **Completa y verificada** (181 tests unitarios + 41 IT backend, con MinIO real; en Docker: seed con fotos, subida/lectura pública/borrado vía proxy, Georef real, caída y recuperación de MinIO con circuito abierto, métricas en Prometheus) |
 | 4.1 Logging y observabilidad (validación) | **Completa y verificada** (187 tests unitarios + 41 IT backend; en Docker: ELK con plantilla, ILM y data view automáticos, búsqueda por `requestId`/`traceId`/campos de resiliencia, ID generado por nginx, Logstash habilitado y deshabilitado, sin secretos indexados) |
 | 5. Frontend | **Completa y verificada** (77 tests frontend; typecheck, lint y build; recorrido completo en el navegador contra el stack Docker) |
-| 6. Tests completos | Pendiente |
+| 6. Tests completos | **Completa y verificada** (252 (209 + 43) tests backend, 99 frontend y 7 E2E con Playwright contra el stack Docker; cobertura backend 92,5 % de líneas, frontend 96,5 %; dos tests intermitentes corregidos) |
 | 7. Validación final | Pendiente |
 
 ## Limitaciones conocidas
@@ -958,8 +997,11 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
   appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos generados durante la
   caída se descartan (buffer en memoria, sin bloquear requests).
-- No hay suite E2E automatizada en un navegador real (Playwright): la validación en navegador de esta fase fue
-  manual y los tests de pantallas corren en jsdom. Se evalúa en la Fase 6.
+- Los E2E crean datos reales en la base contra la que corren (con prefijo `E2E…`): la API no permite borrar
+  departamentos. Conviene correrlos contra un entorno de desarrollo o de pruebas, no contra uno con datos reales.
+- Las URLs mal formadas (`%` suelto, `%2F` codificado) las rechaza Tomcat antes de llegar a la aplicación, con su
+  página HTML genérica de 400 (sin versión ni detalles, pero sin requestId ni formato `ApiError`). Los rechazos del
+  firewall de Spring Security sí responden `ApiError` en JSON.
 - Las fotos no se pueden reordenar ni elegir cuál es la principal (es la primera subida que sigue existiendo).
 - Objetos huérfanos: si falla el borrado compensatorio o el borrado en MinIO después de eliminar la fila, el objeto
   queda en el bucket (registrado en ERROR/WARN con su `objectKey`, inaccesible desde la aplicación). Falta un job
