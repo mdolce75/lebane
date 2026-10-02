@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -q package -DskipTests \
 
 # ---------- Runtime ----------
 # Alpine: incluye wget (busybox) para el healthcheck de readiness.
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 RUN addgroup -S lebane && adduser -S -G lebane -H -s /sbin/nologin lebane
 WORKDIR /app
 COPY --from=build --chown=lebane:lebane /workspace/extracted/dependencies/ ./
