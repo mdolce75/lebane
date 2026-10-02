@@ -1,6 +1,6 @@
 # lebane-backend
 
-API REST de Lebane — Spring Boot 3.5 · Java 21 · Maven. Documentación completa en el [README raíz](../README.md).
+API REST de Lebane — Spring Boot 3.5 · Java 21 · Maven. Documentación completa en el [README raíz](../README.md) y en [docs/](../docs/).
 
 ## Comandos
 
@@ -52,4 +52,4 @@ Flyway aplica las migraciones al arrancar.
 
 `src/test/resources/perf/`: `datos-volumen.sql` (100k departamentos sintéticos) y `explain-listado.sql`
 (`EXPLAIN ANALYZE` de las consultas del listado). `ListadoPerformanceIT` los usa con un PostgreSQL propio; el
-procedimiento manual está en el README raíz, sección "Validación de performance".
+procedimiento manual está en [docs/api.md](../docs/api.md#validación-de-performance).
