@@ -1,29 +1,34 @@
 # lebane-frontend
 
 Panel de administración de Lebane — React 19 · TypeScript · Vite · TanStack Query · React Hook Form · Zod ·
-React Router. Documentación completa en el [README raíz](../README.md).
+React Router. Documentación completa (pantallas, decisiones y validación) en el [README raíz](../README.md#frontend).
 
 ## Comandos
 
 ```bash
-npm install
+npm ci               # instala exactamente package-lock.json
 npm run dev          # http://localhost:5173 (proxy de /api y /actuator/health a VITE_DEV_PROXY_TARGET)
 npm run typecheck
 npm run lint
 npm test             # Vitest + Testing Library (jsdom)
-npm run build        # dist/
+npm run build        # dist/ (code splitting por ruta y chunks de librerías)
 ```
 
 ## Estructura
 
 | Ruta | Contenido |
 |---|---|
-| `src/app` | `App`, rutas, layout, `QueryClient` (reintentos solo para errores transitorios), error boundary |
-| `src/shared/api` | Cliente HTTP centralizado (`X-Request-Id`, timeout, `HttpError` normalizado) |
-| `src/shared/config` | Variables `VITE_*` validadas con Zod |
-| `src/shared/components` | Componentes reutilizables (`ErrorMessage`, `Spinner`) |
-| `src/features/system` | Indicador de disponibilidad del backend (readiness) |
-| `src/pages` | Páginas; el listado/alta/detalle/edición de departamentos llega en la Fase 5 |
-| `nginx/` | Configuración de nginx para la imagen Docker (SPA + proxy a la API; re-resuelve el upstream por DNS con `NGINX_RESOLVER`) |
+| `src/app` | `App`, rutas (alta/detalle/edición lazy), layout, `QueryClient` (reintentos solo para errores transitorios), error boundary |
+| `src/shared/api` | Cliente HTTP (`X-Request-Id`, timeout, `HttpError`), validación de respuestas con Zod, `fieldErrors` del servidor → formulario |
+| `src/shared/components` | `ErrorMessage`, `Spinner`, `FormField`, `Pagination`, `ImageWithFallback`, `EmptyState` |
+| `src/shared/format`, `src/shared/hooks` | Formato de precios/superficie/fechas (es-AR), `useDebouncedValue` |
+| `src/features/departamentos/api` | Esquemas del contrato, funciones de la API y hooks de TanStack Query |
+| `src/features/departamentos/listado` | Listado: estado en la URL (`useListadoSearch`), filtros, tarjetas |
+| `src/features/departamentos/form` | Alta y edición (RHF + Zod con las reglas del backend) |
+| `src/features/departamentos/imagenes` | Validación por contenido, selección con vista previa, subida secuencial, gestión de fotos |
+| `src/features/departamentos/detalle`, `consultas` | Detalle con galería y formulario de consulta |
+| `src/features/direcciones` | Autocompletado de direcciones |
+| `src/test` | Setup, `mockApi` (backend simulado que registra requests), fixtures |
+| `nginx/` | nginx de la imagen Docker (SPA + proxy a la API; re-resuelve el upstream con `NGINX_RESOLVER`) |
 
 Las variables `VITE_*` se embeben en el bundle: nunca deben contener secretos.

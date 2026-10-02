@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { jsonResponse, renderRoute } from '../test/utils';
+import { mockApi } from '../test/mockApi';
+import { item, pagina } from '../test/fixtures';
 import { shouldRetry } from './queryClient';
 import { HttpError } from '../shared/api/errors';
 
@@ -9,15 +11,14 @@ afterEach(() => {
 });
 
 describe('routing', () => {
-  it('renderiza la home con el indicador de API disponible', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ status: 'UP' }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('la raíz redirige al listado y muestra el indicador de API disponible', async () => {
+    const api = mockApi().on('GET', '/api/v1/departamentos', pagina([item()]));
 
     renderRoute('/');
 
-    expect(screen.getByRole('heading', { name: 'Panel de departamentos' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Departamentos' })).toBeInTheDocument();
     expect(await screen.findByText('API disponible')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('/actuator/health/readiness', expect.anything());
+    expect(api.requests('GET', '/actuator/health/readiness')).toHaveLength(1);
   });
 
   it('muestra API no disponible cuando readiness responde 503', async () => {
