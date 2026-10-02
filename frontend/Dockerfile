@@ -15,7 +15,7 @@ RUN npm run build
 # ---------- Runtime ----------
 # nginx sin privilegios (escucha en 8080, solo IPv4). Incluye wget (busybox) para el healthcheck.
 # El healthcheck usa 127.0.0.1: "localhost" resuelve primero a ::1 y nginx no escucha en IPv6.
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 ENV BACKEND_UPSTREAM=http://backend:8080 NGINX_RESOLVER=127.0.0.11 IMAGES_ORIGIN=http://localhost:9000
