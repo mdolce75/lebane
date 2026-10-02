@@ -699,7 +699,19 @@ Panel en `http://localhost:3000` (Docker) o `http://localhost:5173` (`npm run de
 - Cada request lleva un `X-Request-Id` (UUID); los errores muestran ese código, nunca detalles técnicos.
 - Reintentos automáticos solo para errores transitorios (red, timeout, 5xx, 429); nunca para 4xx.
 - Code splitting por ruta y chunks de librerías (ningún chunk supera 500 kB; la carga inicial del listado suma unos 162 kB gzip y alta, detalle y edición se descargan al navegar a ellas).
-- Accesible: labels asociados, errores anunciados (`role="alert"`), paginación con `aria-current`, modo oscuro.
+- Accesible: labels asociados, errores anunciados (`role="alert"`), paginación con `aria-current`, foco visible,
+  respeta `prefers-reduced-motion`.
+
+**Identidad visual** — alineada con [lebane.app](https://www.lebane.app/ar) (relevada del sitio: tipografías,
+paleta y medidas de sus componentes), en `src/index.css` (tokens y base) y `src/styles/app.css` (pantallas):
+- Plus Jakarta Sans en títulos, botones y navegación; Inter en el texto. Autoalojadas con `@fontsource-variable`
+  (sin CDN: la CSP de nginx solo permite fuentes del propio origen; Vite nunca las incrusta como `data:`).
+- Azul `#2065FF`, texto `#343A46`, títulos casi negros, fondos `#F7F7F7` y azul suave `#E2E8FE`.
+- Barra de navegación flotante en forma de píldora, botones píldora (primario y secundario con borde azul tenue),
+  tarjetas blancas de 24 px de radio con sombra difusa, etiquetas de sección en mayúsculas con punto azul, estados
+  en pastillas pastel y rótulos de datos en mayúsculas chicas, como en el panel del producto.
+- Solo tema claro, como el sitio (se quitó el modo oscuro anterior). La marca de la barra es un ícono propio
+  simple; no se copiaron logos ni imágenes del sitio.
 
 **Validación en el navegador contra el stack real**: alta con autocompletado y foto real (un HTML renombrado a
 `.jpg` se rechazó), navegación al detalle, consulta (el contador se actualiza), filtros y orden, y un conflicto de

@@ -1,69 +1,123 @@
+/*
+ * Identidad visual alineada con lebane.app: Plus Jakarta Sans en títulos, botones y navegación; Inter en el texto;
+ * azul #2065FF, texto gris azulado #343A46, superficies blancas muy redondeadas sobre fondos #F7F7F7 y botones
+ * en forma de píldora. Las fuentes se sirven desde el propio bundle (sin CDN: la CSP solo permite 'self').
+ */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/plus-jakarta-sans';
+
 :root {
-  --color-bg: #f7f7f8;
+  --font-body: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', var(--font-body);
+
+  --color-bg: #ffffff;
+  --color-bg-soft: #f7f7f7;
   --color-surface: #ffffff;
-  --color-text: #1d1d1f;
-  --color-muted: #6b6b73;
-  --color-primary: #2c5be0;
+  --color-heading: #000000;
+  --color-text: #343a46;
+  --color-muted: #5a5c5e;
+  --color-subtle: #7b7b7b;
+  --color-primary: #2065ff;
+  --color-primary-hover: #1652d9;
+  --color-primary-soft: #e2e8fe;
+  --color-primary-tint: #eff2fb;
   --color-primary-contrast: #ffffff;
-  --color-border: #e2e2e7;
-  --color-success: #1f9d55;
-  --color-danger: #c62828;
-  --color-danger-bg: #fdecea;
-  --color-warning: #b26a00;
-  --radius: 8px;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --color-border: rgba(53, 59, 70, 0.14);
+  --color-border-soft: rgba(0, 0, 0, 0.06);
+  --color-dark: #343a46;
+
+  --color-success: #12804a;
+  --color-success-bg: #e3f6ea;
+  --color-warning: #8a6100;
+  --color-warning-bg: #fdf3d0;
+  --color-danger: #c4283c;
+  --color-danger-bg: #fde8ec;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --shadow-card: 0 0 0 1px var(--color-border-soft), 0 12px 48px rgba(0, 0, 0, 0.05);
+  --shadow-raised: 0 2px 4px rgba(0, 0, 0, 0.08);
+
+  color-scheme: light;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
   color: var(--color-text);
   background: var(--color-bg);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #121214;
-    --color-surface: #1c1c20;
-    --color-text: #ececf1;
-    --color-muted: #a1a1aa;
-    --color-border: #2e2e35;
-    --color-danger-bg: #3a1d1d;
-  }
+  -webkit-font-smoothing: antialiased;
 }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--color-bg); }
 a { color: var(--color-primary); }
+h1, h2, h3, legend { font-family: var(--font-display); color: var(--color-heading); letter-spacing: -0.01em; }
+::selection { background: var(--color-primary-soft); }
 
 .layout { min-height: 100vh; display: flex; flex-direction: column; }
-.header {
-  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
-  padding: 0.75rem 1rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+
+/* Barra superior flotante en forma de píldora */
+.header { position: sticky; top: 0; z-index: 10; padding: 12px 16px 0; background: var(--color-bg); }
+.header__bar {
+  max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  background: var(--color-bg-soft); border-radius: var(--radius-pill); padding: 10px 10px 10px 24px; min-height: 60px;
 }
-.header__brand { font-weight: 700; font-size: 1.25rem; text-decoration: none; color: var(--color-text); }
-.header__nav { display: flex; gap: 1rem; flex: 1; }
-.header__nav a { text-decoration: none; }
-.header__nav a.active { font-weight: 600; text-decoration: underline; }
-.main { width: 100%; max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
+.header__brand {
+  display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--color-heading);
+  font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; letter-spacing: -0.03em;
+}
+.header__mark { width: 24px; height: 24px; }
+.header__mark rect { fill: var(--color-primary); }
+.header__mark path { fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.header__nav { display: flex; gap: 0.25rem; flex: 1; }
+.header__nav a {
+  font-family: var(--font-display); font-weight: 600; font-size: 0.875rem; color: #222; text-decoration: none;
+  padding: 0.5rem 0.75rem; border-radius: var(--radius-pill);
+}
+.header__nav a:hover { background: rgba(0, 0, 0, 0.04); }
+.header__nav a.active { background: var(--color-surface); box-shadow: var(--shadow-raised); }
+.header__actions { display: flex; align-items: center; gap: 0.75rem; }
+@media (max-width: 640px) {
+  .header__bar { border-radius: var(--radius-lg); padding: 10px 12px; gap: 0.75rem; }
+  .header__actions .header__cta { display: none; }
+}
+
+.main { width: 100%; max-width: 1200px; margin: 0 auto; padding: 2rem 1rem 3rem; }
 .muted { color: var(--color-muted); }
 
+/* Botones en forma de píldora */
 .button {
-  display: inline-block; padding: 0.5rem 1rem; border-radius: var(--radius); border: none; cursor: pointer;
-  background: var(--color-primary); color: var(--color-primary-contrast); text-decoration: none; font: inherit;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  padding: 12px 24px; border-radius: var(--radius-pill); border: 1px solid var(--color-primary); cursor: pointer;
+  background: var(--color-primary); color: var(--color-primary-contrast); text-decoration: none;
+  font-family: var(--font-display); font-weight: 600; font-size: 0.875rem; line-height: 1; letter-spacing: -0.004em;
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.button:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+.button:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.button:focus-visible { outline: 3px solid var(--color-primary-soft); outline-offset: 2px; }
 
-.alert { padding: 1rem; border-radius: var(--radius); margin: 1rem 0; }
-.alert--error { background: var(--color-danger-bg); border: 1px solid var(--color-danger); }
+.alert { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; border: 1px solid transparent; }
+.alert--error { background: var(--color-danger-bg); border-color: rgba(196, 40, 60, 0.25); }
 .alert p { margin: 0.5rem 0; }
 .alert__meta { font-size: 0.85rem; color: var(--color-muted); }
 
 .spinner { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-muted); }
 .spinner__circle {
   width: 1rem; height: 1rem; border-radius: 50%;
-  border: 2px solid var(--color-border); border-top-color: var(--color-primary);
+  border: 2px solid var(--color-primary-soft); border-top-color: var(--color-primary);
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner__circle { animation: none; } }
 
-.status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--color-muted); }
-.status__dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--color-warning); }
-.status--up .status__dot { background: var(--color-success); }
+/* Estado de la API: chip blanco dentro de la barra */
+.status {
+  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; font-weight: 500;
+  color: var(--color-text); background: var(--color-surface); border-radius: var(--radius-pill); padding: 8px 14px;
+}
+.status__dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--color-warning); }
+.status--up .status__dot { background: #19b86a; }
 .status--down .status__dot { background: var(--color-danger); }

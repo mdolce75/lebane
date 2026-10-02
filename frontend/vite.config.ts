@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: false,
       target: 'es2022',
+      // Las fuentes siempre como archivo: incrustadas como data: las bloquearía la CSP de nginx (font-src 'self').
+      assetsInlineLimit: (filePath) => (/\.woff2?$/.test(filePath) ? false : undefined),
       rollupOptions: {
         output: {
           // Librerías en chunks propios: cambian poco, así que quedan en la caché del navegador entre despliegues.
