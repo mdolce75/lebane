@@ -22,7 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
         <!-- 8.5.x usa OkHttp 4 (compatible con el Kotlin 1.9 que gestiona Boot 3.5); 8.6+/9.x requieren OkHttp 5/Kotlin 2. -->
-        <minio.version>8.5.17</minio.version>
+        <minio.version>9.0.3</minio.version>
         <resilience4j.version>2.4.0</resilience4j.version>
         <!-- 1.21.3 (gestionada por Boot 3.5.7) no es compatible con Docker Engine 29+ (API mínima 1.44). -->
         <testcontainers.version>1.21.4</testcontainers.version>
