@@ -132,5 +132,5 @@ El **CI** ([GitHub Actions](.github/workflows/ci.yml)) corre todo en cada PR, in
 | [API](docs/api.md) | Endpoints con ejemplos, errores, listado (paginación, filtros, orden) y validación de performance |
 | [Observabilidad y seguridad](docs/observabilidad.md) | Actuator, liveness y readiness, logging estructurado, correlation ID, datos sensibles |
 | [Calidad](docs/calidad.md) | Tests, cobertura, E2E, CI y validación final de punta a punta |
-| [Decisiones y limitaciones](docs/decisiones.md) | Decisiones técnicas con su justificación y limitaciones conocidas |
+| [Decisiones técnicas](docs/decisiones.md) | Decisiones técnicas con su justificación |
 | [OpenAPI](docs/openapi.json) | Contrato de la API (también en Swagger UI) |
