@@ -1,5 +1,7 @@
 # Lebane
 
+[![CI](https://github.com/mdolce75/lebane/actions/workflows/ci.yml/badge.svg)](https://github.com/mdolce75/lebane/actions/workflows/ci.yml)
+
 Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Spring Boot 3 / Java 21 /
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
@@ -41,6 +43,7 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 - [Correlation ID](#correlation-id)
 - [Política de datos sensibles](#política-de-datos-sensibles)
 - [Tests](#tests)
+- [Integración continua](#integración-continua)
 - [Validación final](#validación-final)
 - [Decisiones técnicas](#decisiones-técnicas)
 - [Estado por fase](#estado-por-fase)
@@ -970,6 +973,22 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/READ
 | Frontend `uploadSequentially.test.ts`, `RouteErrorBoundary.test.tsx` | subida de a una sin concurrencia, errores por foto con requestId; error de render sin detalles técnicos |
 | E2E `departamentos.e2e.ts` | ver [E2E](#e2e-playwright) |
 
+
+## Integración continua
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) en cada pull request y en cada push a `main`:
+
+| Job | Qué hace |
+|---|---|
+| **Backend** | `./mvnw verify`: tests unitarios (incluye el contrato OpenAPI) y de integración con PostgreSQL y MinIO reales (Testcontainers), y cobertura JaCoCo, que queda en el resumen de la corrida y como artefacto |
+| **Frontend** | `npm ci`, lint, tipos, tests con cobertura, build y `npm audit` de las dependencias de producción (falla con vulnerabilidades altas o críticas) |
+| **E2E** | Después de los anteriores: levanta el stack completo con `docker compose up --wait` y corre Playwright con Chromium. Si falla, publica el reporte, las capturas, los *traces* y los logs del stack |
+
+- **Sin credenciales fijas**: el job de E2E genera un `.env` con secretos aleatorios en cada corrida (enmascarados en
+  los logs) a partir de `.env.example`.
+- **Permisos de solo lectura** (`contents: read`) y cancelación de la corrida anterior al pushear de nuevo.
+- **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)): PRs semanales para Maven, npm, imágenes de
+  Docker y GitHub Actions, con versiones menores y parches agrupados; cada PR pasa por el mismo CI.
 ## Validación final
 
 Fase 7, sobre el stack Docker reconstruido desde cero (`docker compose down` + `up -d --build`), además de la
