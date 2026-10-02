@@ -1,17 +1,22 @@
 const priceFormatters = new Map<string, Intl.NumberFormat>();
 
-/** Precio con la moneda del aviso (ARS / USD), formato argentino y sin decimales si son cero. */
+/**
+ * Precio con la moneda del aviso (ARS / USD) en formato argentino: sin decimales si es un importe entero y, si
+ * tiene centavos, siempre con dos ("132.500,50", no "132.500,5").
+ */
 export function formatPrice(amount: number, currency: string): string {
-  let formatter = priceFormatters.get(currency);
+  const decimals = Number.isInteger(amount) ? 0 : 2;
+  const key = `${currency}:${decimals}`;
+  let formatter = priceFormatters.get(key);
   if (!formatter) {
     formatter = new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency,
       currencyDisplay: 'code',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     });
-    priceFormatters.set(currency, formatter);
+    priceFormatters.set(key, formatter);
   }
   return formatter.format(amount);
 }

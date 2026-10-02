@@ -4,13 +4,14 @@ Aplicación inmobiliaria para gestionar **departamentos en venta**: API REST (Sp
 PostgreSQL / MinIO) y panel de administración (React + TypeScript + Vite), orquestados con Docker Compose y con
 un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 
-> **Estado:** Fases 1 a 4.1 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
+> **Estado:** Fases 1 a 5 implementadas **y verificadas**. Fase 1: infraestructura, Actuator, health probes,
 > logging JSON, correlation ID, Docker Compose y perfil ELK. Fase 2: modelo de datos, migraciones Flyway, API de
 > alta / detalle / edición / consultas, validaciones, manejo global de errores y seed idempotente. Fase 3: listado
 > paginado con Specifications y Criteria API, agregados en PostgreSQL, índices y validación sin full scans ni N+1
 > con 100k departamentos. Fase 4: fotos en MinIO, autocompletado de direcciones (stub / API Georef) y Resilience4j
 > con métricas y logs. Fase 4.1: validación de logging y observabilidad (ELK con plantilla, retención y data view
-> automáticos; correlación requestId/traceId de punta a punta). Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
+> automáticos; correlación requestId/traceId de punta a punta). Fase 5: frontend completo (listado, alta, detalle,
+> edición, fotos, autocompletado y consultas). Ver [Estado por fase](#estado-por-fase) y [Limitaciones conocidas](#limitaciones-conocidas).
 
 ---
 
@@ -31,6 +32,7 @@ un perfil opcional de observabilidad (Elasticsearch + Logstash + Kibana).
 - [Imágenes y MinIO](#imágenes-y-minio)
 - [Autocompletado de direcciones](#autocompletado-de-direcciones)
 - [Resiliencia (Resilience4j)](#resiliencia-resilience4j)
+- [Frontend](#frontend)
 - [Actuator, liveness y readiness](#actuator-liveness-y-readiness)
 - [Logging estructurado](#logging-estructurado)
 - [Correlation ID](#correlation-id)
@@ -629,6 +631,59 @@ Verificado en Docker: con MinIO detenido, la primera subida agota los reintentos
 tercera se rechaza en 30 ms; readiness, listado y detalle siguen en 200. Al volver MinIO, pasados 30 s, el circuito
 pasa a `HALF_OPEN` y se cierra con las primeras subidas exitosas.
 
+## Frontend
+
+Panel en `http://localhost:3000` (Docker) o `http://localhost:5173` (`npm run dev`).
+
+| Pantalla | Ruta | Qué hace |
+|---|---|---|
+| Listado | `/departamentos` (`/` redirige) | Tarjetas con foto principal, precio, ubicación, características y contadores. Filtros (texto, ciudad, estado, moneda + precio, ambientes, con/sin fotos), orden y tamaño de página |
+| Alta | `/departamentos/nuevo` | Formulario validado, autocompletado de dirección y hasta 5 fotos con vista previa |
+| Detalle | `/departamentos/:id` | Galería, datos completos, mapa (si hay coordenadas) y formulario de consulta |
+| Edición | `/departamentos/:id/editar` | Mismo formulario con concurrencia optimista y gestión de fotos (eliminar / subir) |
+
+**Listado**
+- **Paginación, filtros y orden en el servidor**: cada cambio es un request; el cliente nunca filtra ni pagina
+  datos. La página anterior se muestra atenuada mientras llega la nueva (`keepPreviousData`).
+- **La URL es la fuente de verdad** (`?q=balcón&estado=DISPONIBLE&sort=precio,desc&page=2`): se puede compartir,
+  recargar y usar el botón "atrás". Los valores inválidos se descartan en lugar de provocar un 400, y la paginación
+  respeta la ventana máxima del backend.
+- Cambios rápidos (aplicar un filtro y cambiar el orden enseguida) se componen sobre el último estado pedido
+  (`useListadoSearch`): ninguno pisa al anterior.
+- Estados: cargando, vacío ("ningún resultado con estos filtros" vs "todavía no hay departamentos"), error con
+  código de seguimiento y reintento.
+- **Imágenes**: placeholder "Sin fotos" y, si una URL no carga (objeto borrado, MinIO caído), "Imagen no
+  disponible" en lugar del ícono roto.
+
+**Alta y edición**
+- React Hook Form + Zod con **las mismas reglas que el backend** (incluidas las que cruzan campos: dormitorios <
+  ambientes, coordenadas completas, moneda obligatoria para filtrar precio). Los `fieldErrors` de un 400 del
+  servidor se muestran en el campo correspondiente porque los nombres coinciden (`direccion.ciudad`).
+- **Autocompletado de dirección** con *debounce* (300 ms, mínimo 3 caracteres): completa calle, número, ciudad,
+  provincia y coordenadas, que siguen siendo editables. Si el proveedor está degradado, avisa que se cargue a mano.
+- **Fotos**: tipo validado por **contenido** (firma JPEG/PNG/WebP, igual que el backend), máximo 5 MB y 5 fotos
+  (contando las ya cargadas); vista previa con object URLs liberadas al quitar o salir; quitar antes de enviar.
+- **Subida con errores parciales**: el departamento se crea y las fotos se suben de a una, cada una con su estado
+  (pendiente, subiendo, subida, error con código de seguimiento). Si alguna falla, el departamento ya existe: se
+  ofrece **reintentar solo las fallidas**, sin volver a crearlo.
+- **Edición sin pisar cambios ajenos**: se envía `If-Match` con la versión leída. Ante un 412 se avisa y se ofrece
+  recargar los datos actuales.
+
+**Transversal**
+- Respuestas de la API validadas con Zod en runtime (un cambio de contrato se ve como "respuesta inválida", no
+  como `undefined` en la UI).
+- Cada request lleva un `X-Request-Id` (UUID); los errores muestran ese código, nunca detalles técnicos.
+- Reintentos automáticos solo para errores transitorios (red, timeout, 5xx, 429); nunca para 4xx.
+- Code splitting por ruta y chunks de librerías (ningún chunk supera 500 kB; la carga inicial del listado suma unos 162 kB gzip y alta, detalle y edición se descargan al navegar a ellas).
+- Accesible: labels asociados, errores anunciados (`role="alert"`), paginación con `aria-current`, modo oscuro.
+
+**Validación en el navegador contra el stack real**: alta con autocompletado y foto real (un HTML renombrado a
+`.jpg` se rechazó), navegación al detalle, consulta (el contador se actualiza), filtros y orden, y un conflicto de
+edición simulando a otro usuario por la API (412 → recargar → guardar conserva ambos cambios). Cada acción quedó
+correlacionada en los logs del backend por su `requestId`. Esta prueba encontró dos errores que ahora cubren
+tests: un filtro que se perdía al cambiar el orden enseguida y el formato de precio con centavos
+("132.500,5" → "132.500,50").
+
 ## Actuator, liveness y readiness
 
 | Endpoint | Acceso | Respuesta |
@@ -801,6 +856,13 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | `StorageIT` | MinIO real: subida, lectura pública, detalle y listado, límite de 5, contenido no imagen, borrado, seed con fotos idempotente, logs sin credenciales |
 | `StorageOutageIT` | MinIO detenido: 503, circuito abierto, rechazo inmediato, readiness/listado/detalle siguen OK, logs de eventos |
 | `AddressResilienceIT` | proveedor externo caído → degradado → circuito abierto → rechazo sin red → recuperación `HALF_OPEN` → `CLOSED` |
+| Frontend `listadoParams.test.ts`, `useListadoSearch.test.tsx` | URL ↔ filtros (valores inválidos descartados, ventana máxima), cambios rápidos que no se pisan (regresión) |
+| Frontend `departamentoSchema.test.ts`, `imageValidation.test.ts`, `format.test.ts` | reglas del formulario iguales al backend, detección de imágenes por contenido, formato de precios |
+| Frontend `components.test.tsx` | placeholder e imagen rota, paginación con ventana máxima |
+| Frontend `DepartamentosListPage.test.tsx` | paginación y filtros enviados al servidor, validación de filtros, vacío vs sin resultados, error con requestId y reintento |
+| Frontend `DepartamentoNuevoPage.test.tsx` | validación, subida secuencial con vista previa, límite de 5, rechazo por contenido, quitar antes de enviar, errores parciales con reintento sin recrear, `fieldErrors` del servidor |
+| Frontend `DepartamentoDetallePage.test.tsx`, `DepartamentoEditarPage.test.tsx` | galería, 404, consulta, vendido; `If-Match`, conflicto 412 con recarga, gestión de fotos |
+| Frontend `DireccionAutocomplete.test.tsx` | debounce, mínimo de caracteres, proveedor degradado |
 | `LogstashAppenderTest` | appender de producción contra un servidor TCP local: JSON con campos comunes, MDC y argumentos, sin propiedades internas, secretos enmascarados; con Logstash caído no bloquea (20.000 eventos) y el apagado no espera más de 5 s |
 | `TraceCorrelationTest` | con tracing activo: `requestId`, `traceId` y `spanId` en el access log, `traceparent` entrante continuado, `exception`/`errorCode`/`status` como campos, sin appender de Logstash cuando está deshabilitado |
 | `AddressResilienceIT` (correlación) | el proveedor externo recibe `X-Request-Id` y `traceparent` con el mismo `traceId` del request |
@@ -823,6 +885,8 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - **Resilience4j programático** (`ResilientExecutor`) en lugar de anotaciones: un solo lugar con el orden de los
   decoradores, sin AOP, con propagación explícita del contexto (MDC y trace) al hilo del TimeLimiter y fallbacks
   tipados en cada servicio.
+- **Frontend: la URL como estado del listado** y validación del contrato con Zod en runtime; formularios con las
+  mismas reglas que el backend; fotos de a una con estado propio (errores parciales manejables).
 - **Plantilla de índice explícita + `ignore_malformed`** en Elasticsearch en lugar del mapeo dinámico: filtros
   exactos sobre `keyword` y ningún evento rechazado por un tipo inesperado.
 - **`shutdownGracePeriod` de 5 s** en el appender de Logstash: el default (1 minuto) demoraba el apagado con
@@ -882,7 +946,7 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 | 3. Specifications, Criteria y listado optimizado | **Completa y verificada** (131 tests unitarios + 34 IT backend; EXPLAIN ANALYZE con 100k departamentos; endpoint probado directo y vía proxy) |
 | 4. Storage, direcciones, resiliencia y métricas | **Completa y verificada** (181 tests unitarios + 41 IT backend, con MinIO real; en Docker: seed con fotos, subida/lectura pública/borrado vía proxy, Georef real, caída y recuperación de MinIO con circuito abierto, métricas en Prometheus) |
 | 4.1 Logging y observabilidad (validación) | **Completa y verificada** (187 tests unitarios + 41 IT backend; en Docker: ELK con plantilla, ILM y data view automáticos, búsqueda por `requestId`/`traceId`/campos de resiliencia, ID generado por nginx, Logstash habilitado y deshabilitado, sin secretos indexados) |
-| 5. Frontend | Pendiente (scaffold, cliente HTTP y routing listos) |
+| 5. Frontend | **Completa y verificada** (77 tests frontend; typecheck, lint y build; recorrido completo en el navegador contra el stack Docker) |
 | 6. Tests completos | Pendiente |
 | 7. Validación final | Pendiente |
 
@@ -894,6 +958,9 @@ cd frontend && npm install && npm run typecheck && npm run lint && npm test && n
 - Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
   appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos generados durante la
   caída se descartan (buffer en memoria, sin bloquear requests).
+- No hay suite E2E automatizada en un navegador real (Playwright): la validación en navegador de esta fase fue
+  manual y los tests de pantallas corren en jsdom. Se evalúa en la Fase 6.
+- Las fotos no se pueden reordenar ni elegir cuál es la principal (es la primera subida que sigue existiendo).
 - Objetos huérfanos: si falla el borrado compensatorio o el borrado en MinIO después de eliminar la fila, el objeto
   queda en el bucket (registrado en ERROR/WARN con su `objectKey`, inaccesible desde la aplicación). Falta un job
   de reconciliación periódico (listar objetos sin fila en `imagen`).
