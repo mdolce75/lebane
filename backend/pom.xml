@@ -26,6 +26,7 @@
         <resilience4j.version>2.4.0</resilience4j.version>
         <!-- 1.21.3 (gestionada por Boot 3.5.7) no es compatible con Docker Engine 29+ (API mínima 1.44). -->
         <testcontainers.version>1.21.4</testcontainers.version>
+        <jacoco.version>0.8.13</jacoco.version>
     </properties>
 
     <dependencies>
@@ -213,6 +214,38 @@
                         <include>**/*IT.java</include>
                     </includes>
                 </configuration>
+            </plugin>
+            <!--
+              Cobertura: el agente de JaCoCo instrumenta los tests unitarios (surefire) y los de integración
+              (failsafe) sobre el mismo target/jacoco.exec; el reporte (target/site/jacoco) se genera en verify,
+              después de failsafe, así que suma ambas suites. Va después de failsafe porque en una misma fase
+              Maven ejecuta los plugins en el orden del POM.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <excludes>
+                        <!-- Metamodelo JPA generado por hibernate-jpamodelgen -->
+                        <exclude>**/*_.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

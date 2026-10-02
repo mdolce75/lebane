@@ -53,7 +53,7 @@ describe('Alta de departamento', () => {
     const user = await completarFormulario();
     await user.upload(screen.getByLabelText('Agregar fotos'), [pngFile('a.png'), pngFile('b.png')]);
     expect(await screen.findByRole('img', { name: 'Vista previa de a.png' })).toHaveAttribute('src', expect.stringMatching(/^blob:/));
-    await user.click(screen.getByRole('button', { name: 'Crear y subir 2 foto(s)' }));
+    await user.click(await screen.findByRole('button', { name: 'Crear y subir 2 foto(s)' }));
 
     expect(await screen.findByText('Departamento creado.')).toBeInTheDocument();
     const [alta] = api.requests('POST', ALTA);
@@ -111,7 +111,7 @@ describe('Alta de departamento', () => {
     await screen.findByRole('heading', { name: 'Nuevo departamento' });
     const user = await completarFormulario();
     await user.upload(screen.getByLabelText('Agregar fotos'), [pngFile('ok.png'), pngFile('falla.png')]);
-    await user.click(screen.getByRole('button', { name: 'Crear y subir 2 foto(s)' }));
+    await user.click(await screen.findByRole('button', { name: 'Crear y subir 2 foto(s)' }));
 
     const aviso = await screen.findByText(/se creó, pero 1 foto\(s\) no se pudieron subir/);
     expect(aviso).toBeInTheDocument();
