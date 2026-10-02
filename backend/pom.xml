@@ -20,7 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
+        <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <!-- 8.5.x usa OkHttp 4 (compatible con el Kotlin 1.9 que gestiona Boot 3.5); 8.6+/9.x requieren OkHttp 5/Kotlin 2. -->
         <minio.version>8.5.17</minio.version>
         <resilience4j.version>2.4.0</resilience4j.version>
