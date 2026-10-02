@@ -74,6 +74,10 @@
   MinIO, que incluye `mc` para el healthcheck. Está **fijada por digest** porque el tier gratuito solo publica
   `latest`. Es configurable con `MINIO_IMAGE`; para actualizarla, `docker pull cgr.dev/chainguard/minio:latest` y
   copiar el nuevo digest.
+- **Filtro de prefijos de Maven desactivado** (`backend/.mvn/maven.config`): Maven 3.10 descarga `/.meta/prefixes.txt`
+  de cada repositorio remoto. El POM padre de Flyway (`flyway-parent`) declara un repositorio de GitHub Packages que
+  responde 401 incluso para leer; Maven no cachea ese error (sí los 404 de los demás) y lo reportaba como `WARNING`
+  en cada build. Sin el filtro el build es igual de rápido: casi todo viene de Maven Central y queda en la caché.
 - **Testcontainers 1.21.4** (sobrescribe la 1.21.3 de Boot 3.5.7): la anterior no es compatible con Docker
   Engine 29+, que exige API ≥ 1.44.
 - **CSP en nginx y no en el backend**: es quien sirve el HTML; el origen de las fotos llega por variable de entorno
