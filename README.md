@@ -475,21 +475,28 @@ formato de página es el estándar de Spring Data (`PagedModel`).
              ORDER BY <índice> OFFSET ? FETCH FIRST ? ROWS ONLY
 2. Total     JpaSpecificationExecutor.count(spec): mismos predicados, sin JOINs.
              Se omite cuando el total se deduce de la página (p. ej. primera página incompleta).
-3. Agregados Solo para los IDs de la página, en una consulta:
-             subconsultas GROUP BY sobre imagen y consulta (COUNT, MIN(posicion)) unidas con LEFT JOIN,
-             + JOIN a la imagen de menor posición = imagen principal.
+3. Agregados Criteria API, solo para los IDs de la página, en una consulta:
+             SELECT d.id, (SELECT COUNT(...) FROM imagen ...), (foto de menor posición),
+                    (SELECT COUNT(...) FROM consulta ...) FROM departamento d WHERE d.id IN (...)
+             (subconsultas escalares correlacionadas, cada una resuelta con un índice)
 ```
+
+**Sin consultas escritas como texto**: página, filtros, orden, total y agregados se construyen con la Criteria API y
+el metamodelo estático (`Departamento_`, `Imagen_`, ...). Ni `@Query` con JPQL/SQL, ni `createQuery(String)`, ni
+SQL nativo, ni concatenación de cadenas; los nombres de atributos tampoco van en texto. `ListadoSinConsultasDeTextoTest`
+hace fallar el build si el código del listado vuelve a tener una consulta de texto.
 
 - **Sin full scans**: cada filtro y orden usa un índice (ver [Validación de performance](#validación-de-performance)).
 - **Sin N+1**: la cantidad de consultas no depende del tamaño de página ni de las fotos o consultas
   (`ListadoIT`, `ListadoPerformanceIT`). No se cargan entidades (`entityLoadCount = 0`).
 - **Sin multiplicación de filas**: los filtros nunca hacen JOIN a colecciones (`conImagenes` usa `EXISTS`), así que
-  el `COUNT` es directo. Los agregados se agrupan por tabla **antes** del JOIN: a lo sumo una fila por
-  departamento, por lo que `COUNT(*)` es exacto y no hace falta `COUNT(DISTINCT ...)`. Unir `departamento ×
-  imagen × consulta` y luego agrupar multiplicaría filas (fotos × consultas) y obligaría a `COUNT(DISTINCT)` sobre
-  ese producto.
-- **SQL nativo solo para los agregados**: las tablas derivadas en el `FROM` (subconsultas agregadas unidas con
-  `LEFT JOIN`) no existen en JPQL ni en la Criteria API estándar. La consulta es fija y con parámetros enlazados.
+  el `COUNT` es directo. Los agregados son subconsultas por departamento, sin JOIN entre `imagen` y `consulta`:
+  no hay producto fotos × consultas y los conteos son exactos sin `COUNT(DISTINCT ...)`.
+- **Agregados con subconsultas correlacionadas**: la Criteria API estándar no admite tablas derivadas en el
+  `FROM`; las subconsultas escalares por fila sí, y con los índices `uk_imagen_departamento_posicion` e
+  `ix_consulta_departamento` cada una es un *index-only scan* sobre las filas de la página (≤ 100). Se cuentan
+  `posicion` y `departamento_id` (columnas `NOT NULL` del índice) en lugar de `id`, que obligaría a leer cada fila
+  de la tabla.
 - **Orden por lista blanca** (`CampoOrden`): ningún nombre de propiedad enviado por el cliente llega a la consulta.
   Siempre termina en `id` para que la paginación sea determinística con valores repetidos.
 
@@ -518,7 +525,7 @@ control negativo comprueba que la medición sí detecta un seq scan real.
 | `q = balcón` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro | 0,1 ms |
 | `q = reciclado` + ciudad (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_titulo_trgm` (trigramas) | 22,6 ms |
 | `COUNT` sin filtros | `Index Only Scan` en `pk_departamento`, `Heap Fetches: 0` | 15,9 ms |
-| Agregados de 20 IDs | `Index Only Scan` en `uk_imagen_departamento_posicion` e `ix_consulta_departamento` + `GroupAggregate` | 0,4 ms |
+| Agregados de 20 IDs | Subconsultas correlacionadas: `Index Only Scan` en `uk_imagen_departamento_posicion` e `ix_consulta_departamento` (`Heap Fetches: 0`), `Index Scan` para la foto principal | 0,6 ms |
 
 Ningún plan contiene `Seq Scan`. Cuando el filtro es poco selectivo, PostgreSQL elige recorrer el índice del orden
 y filtrar hasta completar la página (más barato que usar el índice del filtro y ordenar). Un `COUNT` exacto debe
@@ -918,6 +925,7 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](frontend/READ
 | `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, moneda obligatoria para precio, ventana máxima |
 | `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |
 | `DepartamentoControllerTest` (listado) | formato `PagedModel`, binding de query params, errores de conversión sin detalles técnicos |
+| `ListadoSinConsultasDeTextoTest` | el código del listado (repositorio, Specifications, servicio) no tiene `@Query`, `createQuery(String)`, SQL nativo ni sentencias en literales |
 | `ListadoIT` | filtros, orden, paginación, imagen principal y contadores calculados en PostgreSQL, escape de `%`/`_`, 3 sentencias por página |
 | `ResilientExecutorTest` | reintentos solo transitorios, timeout con cancelación, apertura y rechazo del circuito, propagación de MDC, logs de eventos con campos y sin mensajes de excepción |
 | `ObjectStorageServiceTest`, `ImageTypeTest` | bucket idempotente, reintento reabriendo el stream, 503 sin detalles, compensación que nunca lanza, métricas; detección por magic bytes |
@@ -1026,8 +1034,12 @@ compilación limpia y todas las suites:
 - **Listado en 3 consultas** (página proyectada + `COUNT` + agregados de la página) en lugar de una sola con
   `LEFT JOIN ... GROUP BY` sobre todas las filas filtradas: el `GROUP BY` global agregaría fotos y consultas de
   todos los departamentos que cumplen el filtro antes de paginar. Así solo se agrega lo que se muestra.
-- **Metamodelo JPA estático** (`hibernate-jpamodelgen`, vía `annotationProcessorPaths`): las Specifications y la
-  proyección no usan nombres de atributos en texto; un renombre rompe la compilación, no la ejecución.
+- **Listado 100 % Criteria API**, sin consultas escritas como texto. Los agregados eran SQL nativo (tablas
+  derivadas unidas con `LEFT JOIN`, que la Criteria API no expresa); se reemplazaron por subconsultas escalares
+  correlacionadas: misma cantidad de sentencias, sin *seq scans* y tiempos equivalentes con 100k departamentos
+  (0,6 ms frente a 0,7 ms).
+- **Metamodelo JPA estático** (`hibernate-jpamodelgen`, vía `annotationProcessorPaths`): las Specifications, la
+  proyección y los agregados no usan nombres de atributos en texto; un renombre rompe la compilación, no la ejecución.
 - **`LIKE ... ESCAPE '\'` explícito**: sin él, Hibernate genera `ESCAPE ''`, que en PostgreSQL desactiva el escape y
   rompía las búsquedas con `%` o `_` (lo detectó `ListadoIT`).
 - **Precio ordenado dentro de cada moneda** (`moneda, precio, id`): ARS y USD no son comparables; filtrar por precio
