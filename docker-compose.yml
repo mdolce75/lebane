@@ -77,6 +77,8 @@ services:
       DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-3000}
       # Datos de ejemplo idempotentes (false por defecto)
       SEED_ENABLED: ${SEED_ENABLED:-false}
+      # Documentación OpenAPI: /v3/api-docs y /swagger-ui.html (false en producción si no debe ser pública)
+      OPENAPI_ENABLED: ${OPENAPI_ENABLED:-true}
       # Storage de imágenes (MinIO)
       STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:9000}

@@ -1,7 +1,16 @@
 package com.lebane.departamento.controller;
 
+import static com.lebane.config.OpenApiConfig.BAD_REQUEST;
+import static com.lebane.config.OpenApiConfig.CONFLICT;
+import static com.lebane.config.OpenApiConfig.INTERNAL_ERROR;
+import static com.lebane.config.OpenApiConfig.NOT_FOUND;
+import static com.lebane.config.OpenApiConfig.PRECONDITION_FAILED;
+import static com.lebane.config.OpenApiConfig.SERVICE_UNAVAILABLE;
+import static com.lebane.config.OpenApiConfig.UNSUPPORTED_MEDIA_TYPE;
+
 import java.net.URI;
 
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -18,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.lebane.config.OpenApiConfig;
 import com.lebane.departamento.dto.ConsultaCreatedResponse;
 import com.lebane.departamento.dto.ConsultaRequest;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
@@ -28,17 +38,27 @@ import com.lebane.departamento.service.ConsultaService;
 import com.lebane.departamento.service.DepartamentoListadoService;
 import com.lebane.departamento.service.DepartamentoService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * API de departamentos (v1). Las imágenes se agregan en la Fase 4.
+ * API de departamentos (v1). Los tags de OpenAPI van por método: las consultas se documentan en su propio grupo.
  */
 @RestController
 @RequestMapping(path = DepartamentoController.BASE_PATH, produces = MediaType.APPLICATION_JSON_VALUE)
 public class DepartamentoController {
 
     static final String BASE_PATH = "/api/v1/departamentos";
+
+    private static final String ETAG_DESCRIPCION = "Versión del departamento (p. ej. \"3\"). Enviarla en If-Match "
+            + "al editar para no pisar cambios de otro usuario.";
 
     private final DepartamentoService departamentoService;
     private final DepartamentoListadoService listadoService;
@@ -56,11 +76,36 @@ public class DepartamentoController {
      * ({@code content} + {@code page: {size, number, totalElements, totalPages}}).
      */
     @GetMapping
-    public PagedModel<DepartamentoListItemResponse> listar(@Valid @ModelAttribute DepartamentoListadoParams params) {
+    @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
+    @Operation(summary = "Listar departamentos",
+            description = "Listado paginado con filtros y orden, resueltos en la base de datos (nunca en memoria). "
+                    + "Cada ítem trae su foto principal y la cantidad de fotos y de consultas. Los filtros se "
+                    + "combinan con AND; los valores de `estado` se combinan con OR.")
+    @ApiResponse(responseCode = "200", description = "Página de resultados (puede estar vacía)")
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
+    public PagedModel<DepartamentoListItemResponse> listar(
+            @ParameterObject @Valid @ModelAttribute DepartamentoListadoParams params) {
         return listadoService.listar(params);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
+    @Operation(summary = "Crear un departamento",
+            description = "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica "
+                    + "`estado`, queda DISPONIBLE. Las fotos se suben después, de a una, con el endpoint de imágenes.")
+    @ApiResponse(responseCode = "201", description = "Departamento creado",
+            headers = {
+                @Header(name = HttpHeaders.LOCATION, description = "Ruta relativa del departamento creado",
+                        schema = @Schema(type = "string", example = "/api/v1/departamentos/1")),
+                @Header(name = HttpHeaders.ETAG, description = ETAG_DESCRIPCION,
+                        schema = @Schema(type = "string", example = "\"0\""))
+            })
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "415", ref = UNSUPPORTED_MEDIA_TYPE)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
     public ResponseEntity<DepartamentoDetailResponse> crear(@Valid @RequestBody DepartamentoRequest request) {
         DepartamentoDetailResponse creado = departamentoService.crear(request);
         // Location relativo (RFC 9110): no depende del header Host, que detrás del proxy es el host interno.
@@ -69,7 +114,18 @@ public class DepartamentoController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<DepartamentoDetailResponse> obtener(@PathVariable @Positive Long id) {
+    @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
+    @Operation(summary = "Obtener un departamento",
+            description = "Detalle completo: dirección, fotos ordenadas y cantidad de consultas.")
+    @ApiResponse(responseCode = "200", description = "Departamento encontrado",
+            headers = @Header(name = HttpHeaders.ETAG, description = ETAG_DESCRIPCION,
+                    schema = @Schema(type = "string", example = "\"3\"")))
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
+    public ResponseEntity<DepartamentoDetailResponse> obtener(
+            @Parameter(description = "ID del departamento", example = "1") @PathVariable @Positive Long id) {
         DepartamentoDetailResponse detalle = departamentoService.obtenerDetalle(id);
         return ResponseEntity.ok().eTag(EntityTags.of(detalle.version())).body(detalle);
     }
@@ -79,7 +135,26 @@ public class DepartamentoController {
      * cuando otro usuario modificó el departamento desde esa lectura.
      */
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<DepartamentoDetailResponse> actualizar(@PathVariable @Positive Long id,
+    @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
+    @Operation(summary = "Editar un departamento",
+            description = "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el "
+                    + "ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de "
+                    + "pisar sus cambios.")
+    @ApiResponse(responseCode = "200", description = "Departamento actualizado",
+            headers = @Header(name = HttpHeaders.ETAG, description = "Nueva versión del departamento",
+                    schema = @Schema(type = "string", example = "\"4\"")))
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "409", ref = CONFLICT)
+    @ApiResponse(responseCode = "412", ref = PRECONDITION_FAILED)
+    @ApiResponse(responseCode = "415", ref = UNSUPPORTED_MEDIA_TYPE)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
+    public ResponseEntity<DepartamentoDetailResponse> actualizar(
+            @Parameter(description = "ID del departamento", example = "1") @PathVariable @Positive Long id,
+            @Parameter(in = ParameterIn.HEADER, name = HttpHeaders.IF_MATCH,
+                    description = "ETag leído (p. ej. \"3\"). Opcional: sin él, la edición no verifica la versión.",
+                    schema = @Schema(type = "string", example = "\"3\""))
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) String ifMatch,
             @Valid @RequestBody DepartamentoRequest request) {
         DepartamentoDetailResponse actualizado =
@@ -89,7 +164,19 @@ public class DepartamentoController {
 
     @PostMapping(path = "/{id}/consultas", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public ConsultaCreatedResponse crearConsulta(@PathVariable @Positive Long id,
+    @Tag(name = OpenApiConfig.TAG_CONSULTAS)
+    @Operation(summary = "Enviar una consulta",
+            description = "Registra la consulta de un interesado. Un departamento VENDIDO no recibe consultas (409 "
+                    + "`DEPARTAMENTO_NO_DISPONIBLE`). La respuesta no devuelve los datos personales enviados.")
+    @ApiResponse(responseCode = "201", description = "Consulta registrada")
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "409", ref = CONFLICT)
+    @ApiResponse(responseCode = "415", ref = UNSUPPORTED_MEDIA_TYPE)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
+    public ConsultaCreatedResponse crearConsulta(
+            @Parameter(description = "ID del departamento", example = "1") @PathVariable @Positive Long id,
             @Valid @RequestBody ConsultaRequest request) {
         return consultaService.crear(id, request);
     }

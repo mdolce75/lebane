@@ -27,9 +27,18 @@
         <!-- 1.21.3 (gestionada por Boot 3.5.7) no es compatible con Docker Engine 29+ (API mínima 1.44). -->
         <testcontainers.version>1.21.4</testcontainers.version>
         <jacoco.version>0.8.13</jacoco.version>
+        <!-- 2.8.x es la línea de springdoc para Spring Boot 3.x (la 3.x requiere Boot 4). -->
+        <springdoc.version>2.8.17</springdoc.version>
     </properties>
 
     <dependencies>
+        <!-- Documentación OpenAPI 3.1 generada desde el código (/v3/api-docs) y Swagger UI (/swagger-ui.html) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
         <!-- Web + validación -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

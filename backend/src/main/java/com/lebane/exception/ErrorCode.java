@@ -1,9 +1,12 @@
 package com.lebane.exception;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Códigos de error estables expuestos en {@link ApiError#error()} y en el campo de log {@code errorCode}.
  * Los clientes pueden depender de ellos; los mensajes, en cambio, son solo informativos.
  */
+@Schema(description = "Código estable del error. Los clientes pueden depender de él; el mensaje es solo informativo.")
 public enum ErrorCode {
     VALIDATION_ERROR,
     BAD_REQUEST,

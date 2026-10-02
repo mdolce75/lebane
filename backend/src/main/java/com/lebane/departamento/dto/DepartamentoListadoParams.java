@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Query params de {@code GET /api/v1/departamentos}. Todos opcionales; los textos se normalizan (sin espacios
@@ -24,22 +25,40 @@ import jakarta.validation.constraints.Size;
  * @param sort    {@code createdAt|precio|superficieM2}, opcionalmente {@code ,asc|,desc}
  */
 @ListadoParamsValidos
+// Los filtros no llevan example a propósito: Swagger UI los precarga en "Try it out" y el listado saldría filtrado
+// (y probablemente vacío) sin que el usuario lo pida.
+@Schema(description = "Filtros, orden y paginación del listado. Todos opcionales.")
 public record DepartamentoListadoParams(
+        @Schema(description = "Texto a buscar en el título (sin distinguir mayúsculas; mínimo 3 caracteres)")
         @Size(min = 3, max = 100) String q,
+        @Schema(description = "Ciudad exacta (sin distinguir mayúsculas)")
         @Size(max = 80) String ciudad,
+        @Schema(description = "Estados a incluir; repetir el parámetro para varios (estado=DISPONIBLE&estado=RESERVADO)")
         List<EstadoDepartamento> estado,
+        @Schema(description = "Moneda. Obligatoria si se filtra por precio (ARS y USD no son comparables)")
         Moneda moneda,
+        @Schema(description = "Precio mínimo (requiere moneda)")
         @PositiveOrZero BigDecimal precioMin,
+        @Schema(description = "Precio máximo (requiere moneda; mayor o igual que precioMin)")
         @PositiveOrZero BigDecimal precioMax,
+        @Schema(description = "Ambientes mínimos")
         @Min(1) @Max(20) Integer ambientesMin,
+        @Schema(description = "Dormitorios mínimos")
         @Min(0) @Max(19) Integer dormitoriosMin,
+        @Schema(description = "Baños mínimos")
         @Min(1) @Max(10) Integer banosMin,
+        @Schema(description = "Superficie mínima en m²")
         @PositiveOrZero BigDecimal superficieMin,
+        @Schema(description = "Superficie máxima en m² (mayor o igual que superficieMin)")
         @PositiveOrZero BigDecimal superficieMax,
+        @Schema(description = "true: solo con fotos; false: solo sin fotos; omitido: todos")
         Boolean conImagenes,
+        @Schema(description = "Página, desde 0. (page + 1) × size no puede superar 10.000", example = "0", defaultValue = "0")
         @Min(0) Integer page,
+        @Schema(description = "Tamaño de página", example = "20", defaultValue = "20")
         @Min(1) @Max(MAX_SIZE) Integer size,
         @Pattern(regexp = CampoOrden.PATTERN, message = "debe ser createdAt, precio o superficieM2, con ,asc o ,desc opcional")
+        @Schema(description = "Orden: createdAt, precio o superficieM2, con ,asc o ,desc. El precio se ordena dentro de cada moneda; siempre se desempata por id", defaultValue = "createdAt,desc")
         String sort) {
 
     public static final int DEFAULT_SIZE = 20;
