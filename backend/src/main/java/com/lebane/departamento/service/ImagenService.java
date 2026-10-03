@@ -72,9 +72,9 @@ public class ImagenService {
     }
 
     public ImagenResponse subir(Long departamentoId, InputStreamSource contenido, long sizeBytes) {
-        if (!departamentoRepository.existsById(departamentoId)) {
-            throw new ResourceNotFoundException(DepartamentoService.RECURSO);
-        }
+        Departamento departamento = departamentoRepository.findById(departamentoId)
+                .orElseThrow(() -> new ResourceNotFoundException(DepartamentoService.RECURSO));
+        validarModificable(departamento);
         ImageType tipo = validar(contenido, sizeBytes);
         if (imagenRepository.countByDepartamentoId(departamentoId) >= Imagen.MAX_POR_DEPARTAMENTO) {
             throw limiteAlcanzado();
@@ -100,6 +100,7 @@ public class ImagenService {
         String objectKey = transactionTemplate.execute(status -> {
             Imagen imagen = imagenRepository.findByIdAndDepartamentoId(imagenId, departamentoId)
                     .orElseThrow(() -> new ResourceNotFoundException("imagen"));
+            validarModificable(imagen.getDepartamento());
             imagenRepository.delete(imagen);
             return imagen.getObjectKey();
         });
@@ -145,6 +146,14 @@ public class ImagenService {
         }
         return ImageType.detect(header).orElseThrow(() ->
                 new InvalidRequestException(CAMPO_ARCHIVO, "debe ser una imagen JPEG, PNG o WebP"));
+    }
+
+    /** Un departamento vendido es un registro cerrado: sus fotos tampoco cambian. */
+    private static void validarModificable(Departamento departamento) {
+        if (!departamento.getEstado().esModificable()) {
+            throw new BusinessRuleException(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE,
+                    "El departamento ya fue vendido: no se pueden agregar ni eliminar fotos");
+        }
     }
 
     private static BusinessRuleException limiteAlcanzado() {

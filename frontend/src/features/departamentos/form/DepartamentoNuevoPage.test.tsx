@@ -141,4 +141,11 @@ describe('Alta de departamento', () => {
     expect(screen.getByText('No se pudo guardar el departamento')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Crear departamento' })).toBeEnabled());
   });
+  it('no ofrece publicar directamente como vendido', async () => {
+    mockApi();
+    renderRoute('/departamentos/nuevo');
+
+    const estado = await screen.findByLabelText(/^Estado/);
+    expect(within(estado).getAllByRole('option').map((o) => o.textContent)).toEqual(['Disponible', 'Reservado']);
+  });
 });

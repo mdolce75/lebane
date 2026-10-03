@@ -167,6 +167,12 @@ public class OpenApiConfig {
                 ejemplo("vendido", "Departamento vendido", 409, ErrorCode.DEPARTAMENTO_NO_DISPONIBLE,
                         "El departamento ya no está disponible y no recibe nuevas consultas",
                         "/api/v1/departamentos/7/consultas", Map.of()),
+                ejemplo("vendidoNoModificable", "Departamento vendido: no se modifica", 409,
+                        ErrorCode.DEPARTAMENTO_NO_DISPONIBLE, "El departamento ya fue vendido y no se puede modificar",
+                        "/api/v1/departamentos/7", Map.of()),
+                ejemplo("transicion", "Cambio de estado no permitido", 409, ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
+                        "Un departamento no se puede publicar directamente como vendido", "/api/v1/departamentos",
+                        Map.of()),
                 ejemplo("concurrencia", "Modificación simultánea", 409, ErrorCode.CONCURRENT_MODIFICATION,
                         "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
                         "/api/v1/departamentos/7", Map.of())));

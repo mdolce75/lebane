@@ -75,5 +75,7 @@ describe('Detalle de departamento', () => {
 
     expect(await screen.findByText('Este departamento ya fue vendido y no recibe nuevas consultas.')).toBeInTheDocument();
     expect(screen.queryByRole('form', { name: 'Consulta' })).not.toBeInTheDocument();
+    // Registro cerrado: no se ofrece editarlo.
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
   });
 });

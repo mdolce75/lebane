@@ -8,6 +8,7 @@ import { MAX_IMAGES } from '../imagenes/imageValidation';
 import { uploadSequentially } from '../imagenes/uploadSequentially';
 import { useImageSelection } from '../imagenes/useImageSelection';
 import { DepartamentoForm } from './DepartamentoForm';
+import { ESTADOS_ALTA } from '../estadoReglas';
 import { valoresIniciales } from './departamentoSchema';
 
 /**
@@ -64,6 +65,7 @@ export function DepartamentoNuevoPage() {
       )}
 
       <DepartamentoForm
+        estadosPermitidos={ESTADOS_ALTA}
         defaultValues={valoresIniciales}
         submitLabel={seleccion.items.length > 0 ? `Crear y subir ${seleccion.items.length} foto(s)` : 'Crear departamento'}
         onSubmit={onSubmit}

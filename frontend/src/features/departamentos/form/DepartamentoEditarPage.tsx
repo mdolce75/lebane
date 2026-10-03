@@ -8,6 +8,7 @@ import type { DepartamentoPayload } from '../api/schemas';
 import { ImagenesManager } from '../imagenes/ImagenesManager';
 import { NoEncontrado } from '../detalle/NoEncontrado';
 import { DepartamentoForm } from './DepartamentoForm';
+import { esModificable, estadosParaEdicion } from '../estadoReglas';
 import { fromDetalle } from './departamentoSchema';
 
 /**
@@ -49,6 +50,16 @@ export function DepartamentoEditarPage() {
       </nav>
       <h1>Editar {data.titulo}</h1>
 
+      {!esModificable(data.estado) && (
+        <div className="alert alert--warning" role="alert">
+          <strong>Este departamento ya fue vendido.</strong>
+          <p>Es un registro cerrado: no se pueden modificar sus datos ni sus fotos.</p>
+          <div className="alert__actions">
+            <Link to={`/departamentos/${id}`} className="button button--ghost">Volver al detalle</Link>
+          </div>
+        </div>
+      )}
+
       {conflicto && (
         <div className="alert alert--warning" role="alert">
           <strong>Otro usuario modificó este departamento mientras lo editabas.</strong>
@@ -63,17 +74,22 @@ export function DepartamentoEditarPage() {
         </div>
       )}
 
-      {/* key: al recargar una versión nueva, el formulario se reinicia con esos datos. */}
-      <DepartamentoForm
-        key={data.version}
-        defaultValues={fromDetalle(data)}
-        submitLabel="Guardar cambios"
-        onSubmit={onSubmit}
-        onCancel={() => navigate(`/departamentos/${id}`)}
-        disabled={conflicto}
-      />
+      {esModificable(data.estado) && (
+        <>
+          {/* key: al recargar una versión nueva, el formulario se reinicia con esos datos. */}
+          <DepartamentoForm
+            key={data.version}
+            defaultValues={fromDetalle(data)}
+            estadosPermitidos={estadosParaEdicion(data.estado)}
+            submitLabel="Guardar cambios"
+            onSubmit={onSubmit}
+            onCancel={() => navigate(`/departamentos/${id}`)}
+            disabled={conflicto}
+          />
 
-      <ImagenesManager departamentoId={id} imagenes={data.imagenes} />
+          <ImagenesManager departamentoId={id} imagenes={data.imagenes} />
+        </>
+      )}
     </section>
   );
 }

@@ -29,12 +29,12 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 | Método | Ruta | Descripción | Respuestas |
 |---|---|---|---|
 | `GET` | `/api/v1/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
-| `POST` | `/api/v1/departamentos` | Alta | `201` + `Location` + `ETag` · `400` · `409` |
+| `POST` | `/api/v1/departamentos` | Alta (no como `VENDIDO`) | `201` + `Location` + `ETag` · `400` · `409` |
 | `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas) | `200` + `ETag` · `400` · `404` |
-| `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional | `200` + `ETag` · `400` · `404` · `409` · `412` |
+| `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional; un `VENDIDO` no se edita | `200` + `ETag` · `400` · `404` · `409` · `412` |
 | `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido) |
 | `POST` | `/api/v1/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](arquitectura.md#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
-| `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` |
+| `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` · `409` (vendido) |
 | `GET` | `/api/v1/direcciones/autocompletar?q=` | Autocompletado de direcciones ([detalle](arquitectura.md#autocompletado-de-direcciones)) | `200` · `400` |
 
 **Alta / edición** (`DepartamentoRequest`):
@@ -86,6 +86,21 @@ curl -i -X PUT http://localhost:8080/api/v1/departamentos/1 \
   -H 'Content-Type: application/json' -H 'If-Match: "0"' -d @departamento.json
 ```
 
+**Ciclo de vida del estado** (`EstadoDepartamento`):
+
+```
+DISPONIBLE ⇄ RESERVADO
+    │           │
+    └──► VENDIDO ◄┘   (final)
+```
+
+- Un departamento no se publica directamente como `VENDIDO` (`409 TRANSICION_DE_ESTADO_INVALIDA`).
+- Un departamento `VENDIDO` es un registro cerrado: no cambia de estado, no se edita (ni sus datos ni sus fotos) y no
+  recibe consultas (`409 DEPARTAMENTO_NO_DISPONIBLE`). Si además el `If-Match` está desactualizado, primero responde
+  `412`, para que el cliente recargue y vea el estado actual.
+- Las reglas viven en el enum (`transicionesPermitidas`, `esModificable`, `admiteAlta`) y se aplican en los servicios;
+  el frontend las replica para no ofrecer opciones que el backend va a rechazar.
+
 **Consultas** (`ConsultaRequest`): `nombre` (obligatorio, ≤ 100), `email` (obligatorio, válido), `telefono`
 (opcional, `+`, dígitos, espacios, guiones y paréntesis, 6..30), `mensaje` (10..2000). Un departamento `VENDIDO`
 no recibe consultas (`409 DEPARTAMENTO_NO_DISPONIBLE`). La respuesta solo incluye `id`, `departamentoId` y
@@ -134,7 +149,8 @@ Todas las respuestas de error (validación, dominio, Spring MVC, Spring Security
 | `NOT_ACCEPTABLE` | 406 | El cliente no acepta JSON (sin cuerpo) |
 | `CONFLICT` | 409 | Violación de una restricción de la base (sin exponer SQL ni nombres de constraints) |
 | `CONCURRENT_MODIFICATION` | 409 | Conflicto de concurrencia optimista |
-| `DEPARTAMENTO_NO_DISPONIBLE` | 409 | Regla de negocio (consulta sobre un departamento vendido) |
+| `DEPARTAMENTO_NO_DISPONIBLE` | 409 | Regla de negocio: un departamento vendido no se edita, no cambia sus fotos ni recibe consultas |
+| `TRANSICION_DE_ESTADO_INVALIDA` | 409 | Regla de negocio: cambio de estado no permitido (p. ej. publicar directamente como vendido) |
 | `LIMITE_IMAGENES_ALCANZADO` | 409 | El departamento ya tiene 5 fotos |
 | `STORAGE_UNAVAILABLE` | 503 | MinIO caído, lento, con el circuito abierto o mal configurado (detalle técnico solo en logs) |
 | `PRECONDITION_FAILED` | 412 | `If-Match` desactualizado |

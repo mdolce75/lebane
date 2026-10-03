@@ -6,7 +6,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { FormField } from '../../../shared/components/FormField';
 import { DireccionAutocomplete } from '../../direcciones/DireccionAutocomplete';
 import type { SugerenciaDireccion } from '../../direcciones/direccionesApi';
-import { estados, monedas, type DepartamentoPayload } from '../api/schemas';
+import { monedas, type DepartamentoPayload, type Estado } from '../api/schemas';
 import { ESTADO_LABELS } from '../estadoLabels';
 import { departamentoFormSchema, toPayload, type DepartamentoFormValues } from './departamentoSchema';
 
@@ -19,6 +19,8 @@ type Props = {
   children?: ReactNode;
   onCancel?: () => void;
   disabled?: boolean;
+  /** Estados que se pueden elegir (el alta no ofrece VENDIDO; la edición, solo las transiciones permitidas). */
+  estadosPermitidos: readonly Estado[];
 };
 
 const CAMPOS: FieldPath<DepartamentoFormValues>[] = [
@@ -27,7 +29,9 @@ const CAMPOS: FieldPath<DepartamentoFormValues>[] = [
   'direccion.provincia', 'direccion.codigoPostal', 'direccion.latitud', 'direccion.longitud', 'direccion.placeId',
 ];
 
-export function DepartamentoForm({ defaultValues, submitLabel, onSubmit, children, onCancel, disabled = false }: Props) {
+export function DepartamentoForm({
+  defaultValues, submitLabel, onSubmit, children, onCancel, disabled = false, estadosPermitidos,
+}: Props) {
   const {
     register,
     handleSubmit,
@@ -84,7 +88,7 @@ export function DepartamentoForm({ defaultValues, submitLabel, onSubmit, childre
         </FormField>
         <FormField label="Estado" htmlFor="estado" error={e.estado?.message} required>
           <select id="estado" {...register('estado')}>
-            {estados.map((s) => (
+            {estadosPermitidos.map((s) => (
               <option key={s} value={s}>{ESTADO_LABELS[s]}</option>
             ))}
           </select>
