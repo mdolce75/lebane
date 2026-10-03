@@ -58,7 +58,7 @@ public class ConsultaService {
         // serializan y el segundo ve la consulta del primero.
         departamentoRepository.lockById(departamentoId);
         Consulta nueva = mapper.toEntity(departamento, request);
-        if (consultaRepository.existsByDepartamentoIdAndEmailIgnoreCaseAndCreatedAtAfter(departamentoId,
+        if (consultaRepository.existeConsultaDesde(departamentoId,
                 nueva.getEmail(), clock.instant().minus(VENTANA_DUPLICADOS))) {
             throw new BusinessRuleException(ErrorCode.CONSULTA_DUPLICADA,
                     "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas");

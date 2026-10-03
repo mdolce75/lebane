@@ -173,4 +173,9 @@ public final class DepartamentoSpecifications {
     private static Predicate igualSinMayusculas(CriteriaBuilder cb, Path<String> columna, String valor) {
         return valor == null ? cb.isNull(columna) : cb.equal(cb.lower(columna), valor.toLowerCase(Locale.ROOT));
     }
+
+    /** Código comercial exacto; usa el índice único de {@code codigo}. */
+    public static Specification<Departamento> conCodigo(String codigo) {
+        return (root, query, cb) -> cb.equal(root.get(Departamento_.codigo), codigo);
+    }
 }
