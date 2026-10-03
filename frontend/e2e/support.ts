@@ -16,6 +16,11 @@ export function marca(): string {
   return `E2E${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 }
 
+/** Unidad aleatoria (hasta 10 caracteres) para que cada alta de los tests tenga una dirección propia. */
+export function unidadUnica(): string {
+  return `E${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export type DepartamentoCreado = { id: number; titulo: string };
 
 export async function crearDepartamento(
@@ -33,7 +38,8 @@ export async function crearDepartamento(
       banos: 1,
       superficieM2: 65,
       estado: 'DISPONIBLE',
-      direccion: { calle: 'Gorriti', numero: '4850', ciudad: 'Ciudad Autónoma de Buenos Aires', provincia: 'CABA' },
+      // Unidad propia por alta: la API rechaza dos departamentos publicados en la misma dirección.
+      direccion: { calle: 'Gorriti', numero: '4850', unidad: unidadUnica(), ciudad: 'Ciudad Autónoma de Buenos Aires', provincia: 'CABA' },
       ...overrides,
     },
   });

@@ -103,6 +103,20 @@ public class Direccion {
         return placeId;
     }
 
+    /**
+     * Misma unidad física: calle, número, piso, unidad, ciudad y provincia, sin distinguir mayúsculas. No compara
+     * código postal, coordenadas ni {@code placeId}: la misma dirección puede cargarse con o sin ellos.
+     */
+    public boolean mismaUbicacion(Direccion otra) {
+        return otra != null && igualSinMayusculas(calle, otra.calle) && igualSinMayusculas(numero, otra.numero)
+                && igualSinMayusculas(piso, otra.piso) && igualSinMayusculas(unidad, otra.unidad)
+                && igualSinMayusculas(ciudad, otra.ciudad) && igualSinMayusculas(provincia, otra.provincia);
+    }
+
+    private static boolean igualSinMayusculas(String a, String b) {
+        return a == null ? b == null : a.equalsIgnoreCase(b);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {

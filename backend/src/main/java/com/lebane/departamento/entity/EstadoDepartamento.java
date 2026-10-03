@@ -37,6 +37,11 @@ public enum EstadoDepartamento {
     }
 
     /** Un departamento vendido es un registro cerrado: no se editan sus datos ni sus fotos. */
+    /** Estados de un aviso publicado (no vendido): los que cuentan para detectar avisos duplicados. */
+    public static Set<EstadoDepartamento> activos() {
+        return EnumSet.of(DISPONIBLE, RESERVADO);
+    }
+
     public boolean esModificable() {
         return this != VENDIDO;
     }

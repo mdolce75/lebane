@@ -10,12 +10,16 @@ import org.springframework.data.jpa.domain.Specification;
 
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.Departamento_;
+import com.lebane.departamento.entity.Direccion;
 import com.lebane.departamento.entity.Direccion_;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
 import com.lebane.departamento.entity.Imagen_;
 import com.lebane.departamento.entity.Moneda;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.SingularAttribute;
 
@@ -140,5 +144,33 @@ public final class DepartamentoSpecifications {
         if (spec != null) {
             specs.add(spec);
         }
+    }
+
+    /**
+     * Regla de avisos duplicados: un departamento publicado (no vendido) en la misma unidad física que
+     * {@code direccion} (ver {@link Direccion#mismaUbicacion}), sin distinguir mayúsculas. {@code excluirId} deja
+     * afuera al propio departamento al editarlo. Se resuelve con {@code ix_departamento_direccion}.
+     */
+    public static Specification<Departamento> publicadoEnLaMismaDireccion(Direccion direccion, Long excluirId) {
+        return (root, query, cb) -> {
+            Path<Direccion> d = root.get(Departamento_.direccion);
+            List<Predicate> predicados = new ArrayList<>(List.of(
+                    root.get(Departamento_.estado).in(EstadoDepartamento.activos()),
+                    igualSinMayusculas(cb, d.get(Direccion_.calle), direccion.getCalle()),
+                    igualSinMayusculas(cb, d.get(Direccion_.numero), direccion.getNumero()),
+                    igualSinMayusculas(cb, d.get(Direccion_.piso), direccion.getPiso()),
+                    igualSinMayusculas(cb, d.get(Direccion_.unidad), direccion.getUnidad()),
+                    igualSinMayusculas(cb, d.get(Direccion_.ciudad), direccion.getCiudad()),
+                    igualSinMayusculas(cb, d.get(Direccion_.provincia), direccion.getProvincia())));
+            if (excluirId != null) {
+                predicados.add(cb.notEqual(root.get(Departamento_.id), excluirId));
+            }
+            return cb.and(predicados.toArray(Predicate[]::new));
+        };
+    }
+
+    /** {@code lower(columna) = lower(valor)}; un valor ausente solo coincide con {@code NULL}. */
+    private static Predicate igualSinMayusculas(CriteriaBuilder cb, Path<String> columna, String valor) {
+        return valor == null ? cb.isNull(columna) : cb.equal(cb.lower(columna), valor.toLowerCase(Locale.ROOT));
     }
 }

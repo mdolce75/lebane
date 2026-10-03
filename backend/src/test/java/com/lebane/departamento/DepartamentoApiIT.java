@@ -167,6 +167,47 @@ class DepartamentoApiIT {
         assertThat(detalle.path("estado").asText()).isEqualTo("VENDIDO");
     }
 
+    /** Reglas de duplicados por HTTP: la misma dirección publicada dos veces y la misma consulta repetida. */
+    @Test
+    void duplicateRulesAreEnforcedOverHttp() throws Exception {
+        String alta = TestFixtures.departamentoJson(TestFixtures.unidadUnica());
+        ResponseEntity<String> primero = rest.exchange(BASE, HttpMethod.POST, json(alta), String.class);
+        assertThat(primero.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        long id = objectMapper.readTree(primero.getBody()).path("id").asLong();
+
+        // La misma dirección (con otras mayúsculas) no se publica dos veces, ni por alta ni por edición.
+        assertError(rest.exchange(BASE, HttpMethod.POST, json(alta.replace("\"Gorriti\"", "\"GORRITI\"")),
+                String.class), HttpStatus.CONFLICT, "AVISO_DUPLICADO");
+        long otro = crearDisponible();
+        assertError(rest.exchange(BASE + "/" + otro, HttpMethod.PUT, json(alta), String.class),
+                HttpStatus.CONFLICT, "AVISO_DUPLICADO");
+
+        // Editar sin cambiar la dirección no choca consigo mismo; una vez vendido, la dirección se puede publicar.
+        ResponseEntity<String> vendido = rest.exchange(BASE + "/" + id, HttpMethod.PUT,
+                json(alta.replace("}\n}", "},\n  \"estado\": \"VENDIDO\"\n}")), String.class);
+        assertThat(vendido.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(rest.exchange(BASE, HttpMethod.POST, json(alta), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        // El mismo email (sin distinguir mayúsculas) no consulta dos veces por el mismo departamento en 24 horas.
+        String consultas = BASE + "/" + otro + "/consultas";
+        assertThat(rest.exchange(consultas, HttpMethod.POST, json(TestFixtures.consultaJson()), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertError(rest.exchange(consultas, HttpMethod.POST,
+                json(TestFixtures.consultaJson().replace("ana.perez@example.com", "Ana.Perez@Example.com")),
+                String.class), HttpStatus.CONFLICT, "CONSULTA_DUPLICADA");
+        assertThat(rest.exchange(consultas, HttpMethod.POST,
+                json(TestFixtures.consultaJson().replace("ana.perez@", "otra.persona@")), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        JsonNode detalle = objectMapper.readTree(rest.getForEntity(BASE + "/" + otro, String.class).getBody());
+        assertThat(detalle.path("cantidadConsultas").asLong()).isEqualTo(2);
+    }
+
+    private void assertError(ResponseEntity<String> response, HttpStatus status, String error) throws Exception {
+        assertThat(response.getStatusCode()).isEqualTo(status);
+        assertThat(objectMapper.readTree(response.getBody()).path("error").asText()).isEqualTo(error);
+    }
+
     private long crearDisponible() throws Exception {
         ResponseEntity<String> created = rest.exchange(BASE, HttpMethod.POST, json(TestFixtures.departamentoJson()),
                 String.class);

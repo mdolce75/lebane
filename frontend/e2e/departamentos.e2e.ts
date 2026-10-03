@@ -1,5 +1,5 @@
 import { expect, test, type Request } from '@playwright/test';
-import { crearDepartamento, marca, obtenerDepartamento, PNG_1X1 } from './support';
+import { crearDepartamento, marca, obtenerDepartamento, PNG_1X1, unidadUnica } from './support';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const esListado = (r: Request) => new URL(r.url()).pathname === '/api/v1/departamentos' && r.method() === 'GET';
@@ -77,6 +77,7 @@ test.describe('Alta', () => {
     await page.getByLabel(/^Superficie/).fill('70');
     await page.getByLabel(/^Calle/).fill('Gorriti');
     await page.getByLabel(/^Número/).fill('4850');
+    await page.getByLabel(/^Unidad/).fill(unidadUnica());
     await page.getByLabel(/^Ciudad/).fill('Ciudad Autónoma de Buenos Aires');
     await page.getByLabel(/^Provincia/).fill('CABA');
     await page.getByLabel('Agregar fotos').setInputFiles({ name: 'frente.png', mimeType: 'image/png', buffer: PNG_1X1 });

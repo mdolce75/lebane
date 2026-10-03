@@ -173,6 +173,12 @@ public class OpenApiConfig {
                 ejemplo("transicion", "Cambio de estado no permitido", 409, ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
                         "Un departamento no se puede publicar directamente como vendido", "/api/v1/departamentos",
                         Map.of()),
+                ejemplo("avisoDuplicado", "Departamento duplicado", 409, ErrorCode.AVISO_DUPLICADO,
+                        "Ya hay un departamento publicado en la misma dirección (calle, número, piso y unidad)",
+                        "/api/v1/departamentos", Map.of()),
+                ejemplo("consultaDuplicada", "Consulta duplicada", 409, ErrorCode.CONSULTA_DUPLICADA,
+                        "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas",
+                        "/api/v1/departamentos/7/consultas", Map.of()),
                 ejemplo("concurrencia", "Modificación simultánea", 409, ErrorCode.CONCURRENT_MODIFICATION,
                         "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
                         "/api/v1/departamentos/7", Map.of())));
