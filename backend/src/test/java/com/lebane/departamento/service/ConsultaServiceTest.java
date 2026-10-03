@@ -92,7 +92,7 @@ class ConsultaServiceTest {
     void rechazaElMismoEmailSobreElMismoDepartamentoEnLas24Horas() {
         when(departamentoRepository.findById(7L))
                 .thenReturn(Optional.of(new Departamento("DEP-X", EstadoDepartamento.DISPONIBLE)));
-        when(consultaRepository.existsByDepartamentoIdAndEmailIgnoreCaseAndCreatedAtAfter(7L,
+        when(consultaRepository.existeConsultaDesde(7L,
                 "ana.perez@example.com", Instant.parse("2026-10-02T12:00:00Z"))).thenReturn(true);
 
         assertThatThrownBy(() -> service.crear(7L, TestFixtures.consulta()))
@@ -112,7 +112,7 @@ class ConsultaServiceTest {
         // Dos envíos simultáneos se serializan con el lock: el segundo ve la consulta del primero.
         InOrder orden = inOrder(departamentoRepository, consultaRepository);
         orden.verify(departamentoRepository).lockById(7L);
-        orden.verify(consultaRepository).existsByDepartamentoIdAndEmailIgnoreCaseAndCreatedAtAfter(7L,
+        orden.verify(consultaRepository).existeConsultaDesde(7L,
                 "ana.perez@example.com", AHORA.minus(ConsultaService.VENTANA_DUPLICADOS));
         orden.verify(consultaRepository).saveAndFlush(any());
     }

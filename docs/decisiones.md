@@ -45,7 +45,11 @@
 - **Listado en 3 consultas** (página proyectada + `COUNT` + agregados de la página) en lugar de una sola con
   `LEFT JOIN ... GROUP BY` sobre todas las filas filtradas: el `GROUP BY` global agregaría fotos y consultas de
   todos los departamentos que cumplen el filtro antes de paginar. Así solo se agrega lo que se muestra.
-- **Listado 100 % Criteria API**, sin consultas escritas como texto. Los agregados eran SQL nativo (tablas
+- **Backend 100 % Criteria API**: ninguna consulta escrita como texto ni derivada del nombre del método. Los
+  repositorios exponen métodos `default` sobre Specifications (legibles en el servicio y fáciles de mockear) y
+  fragmentos con Criteria para las proyecciones y el bloqueo de fila. Un renombre en las entidades rompe la
+  compilación, no la ejecución.
+- **Listado 100 % Criteria API**. Los agregados eran SQL nativo (tablas
   derivadas unidas con `LEFT JOIN`, que la Criteria API no expresa); se reemplazaron por subconsultas escalares
   correlacionadas: misma cantidad de sentencias, sin *seq scans* y tiempos equivalentes con 100k departamentos
   (0,6 ms frente a 0,7 ms).

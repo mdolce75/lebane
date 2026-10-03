@@ -37,7 +37,7 @@
 │   └── src/main/java/com/lebane
 │       ├── config          Seguridad, CORS, auditoría JPA, propiedades
 │       ├── departamento    controller · dto (+ validation) · entity · mapper · repository · service
-│       │                   repository: Specifications + fragmento Criteria/SQL del listado
+│       │                   repository: Specifications + fragmentos Criteria (listado, id/bloqueo)
 │       ├── address         client (Georef) · controller · dto · provider (Stub/External) · service
 │       ├── storage         client (MinIO) · config · service (resiliencia, métricas, logs, URLs)
 │       ├── resilience      ResilientExecutor (Retry+CircuitBreaker+TimeLimiter) y logs de eventos

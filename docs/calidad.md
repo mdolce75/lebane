@@ -84,7 +84,7 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/R
 | `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, moneda obligatoria para precio, ventana máxima |
 | `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |
 | `DepartamentoControllerTest` (listado) | formato `PagedModel`, binding de query params, errores de conversión sin detalles técnicos |
-| `ListadoSinConsultasDeTextoTest` | el código del listado (repositorio, Specifications, servicio) no tiene `@Query`, `createQuery(String)`, SQL nativo ni sentencias en literales |
+| `SinConsultasDeTextoTest` | ningún archivo del backend tiene `@Query`, `createQuery(String)`, SQL nativo, `JdbcTemplate` ni sentencias en literales, y ningún repositorio declara consultas derivadas: todo es Criteria API |
 | `ListadoIT` | filtros, orden, paginación, imagen principal y contadores calculados en PostgreSQL, escape de `%`/`_`, 3 sentencias por página |
 | `ResilientExecutorTest` | reintentos solo transitorios, timeout con cancelación, apertura y rechazo del circuito, propagación de MDC, logs de eventos con campos y sin mensajes de excepción |
 | `ObjectStorageServiceTest`, `ImageTypeTest` | bucket idempotente, reintento reabriendo el stream, 503 sin detalles, compensación que nunca lanza, métricas; detección por magic bytes |

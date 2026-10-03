@@ -216,7 +216,7 @@ class ImagenServiceTest {
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting(e -> ((BusinessRuleException) e).getErrorCode())
                 .isEqualTo(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE);
-        verify(imagenRepository, never()).delete(any());
+        verify(imagenRepository, never()).delete(any(Imagen.class));
         verify(storage, never()).delete(anyString());
     }
 
