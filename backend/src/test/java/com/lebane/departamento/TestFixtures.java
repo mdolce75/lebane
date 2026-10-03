@@ -1,6 +1,7 @@
 package com.lebane.departamento;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import com.lebane.departamento.dto.ConsultaRequest;
 import com.lebane.departamento.dto.DepartamentoRequest;
@@ -33,8 +34,16 @@ public final class TestFixtures {
                 "¿Se puede visitar el sábado por la mañana?");
     }
 
-    /** JSON válido de alta, para tests HTTP. */
+    /**
+     * JSON válido de alta, para tests HTTP. Cada llamada usa una unidad distinta: la regla de avisos duplicados
+     * rechaza dos departamentos publicados en la misma dirección.
+     */
     public static String departamentoJson() {
+        return departamentoJson(unidadUnica());
+    }
+
+    /** JSON válido de alta en una unidad dada (para probar la regla de avisos duplicados). */
+    public static String departamentoJson(String unidad) {
         return """
                 {
                   "titulo": "3 ambientes en Palermo",
@@ -49,7 +58,7 @@ public final class TestFixtures {
                     "calle": "Gorriti",
                     "numero": "4850",
                     "piso": "7",
-                    "unidad": "B",
+                    "unidad": "%s",
                     "ciudad": "Ciudad Autónoma de Buenos Aires",
                     "provincia": "CABA",
                     "codigoPostal": "C1414",
@@ -57,7 +66,12 @@ public final class TestFixtures {
                     "longitud": -58.4305
                   }
                 }
-                """;
+                """.formatted(unidad);
+    }
+
+    /** Unidad aleatoria (máximo 10 caracteres) para que cada alta tenga una dirección propia. */
+    public static String unidadUnica() {
+        return "U" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     public static String consultaJson() {

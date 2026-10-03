@@ -242,7 +242,7 @@
         "tags" : [ "Departamentos" ]
       },
       "post" : {
-        "description" : "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 `TRANSICION_DE_ESTADO_INVALIDA`). Las fotos se suben después, de a una, con el endpoint de imágenes.",
+        "description" : "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 `TRANSICION_DE_ESTADO_INVALIDA`), ni repetir la dirección (calle, número, piso, unidad, ciudad y provincia) de otro departamento publicado (409 `AVISO_DUPLICADO`). Las fotos se suben después, de a una, con el endpoint de imágenes.",
         "operationId" : "crear",
         "parameters" : [ {
           "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
@@ -547,7 +547,7 @@
         "tags" : [ "Departamentos" ]
       },
       "put" : {
-        "description" : "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de pisar sus cambios. Reglas de estado: DISPONIBLE ⇄ RESERVADO y ambos → VENDIDO; un departamento VENDIDO no se puede modificar (409 `DEPARTAMENTO_NO_DISPONIBLE`) y un cambio de estado no permitido responde 409 `TRANSICION_DE_ESTADO_INVALIDA`.",
+        "description" : "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de pisar sus cambios. Reglas de estado: DISPONIBLE ⇄ RESERVADO y ambos → VENDIDO; un departamento VENDIDO no se puede modificar (409 `DEPARTAMENTO_NO_DISPONIBLE`) y un cambio de estado no permitido responde 409 `TRANSICION_DE_ESTADO_INVALIDA`. Si cambia la dirección, no puede coincidir con la de otro departamento publicado (409 `AVISO_DUPLICADO`).",
         "operationId" : "actualizar",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -645,7 +645,7 @@
     },
     "/api/v1/departamentos/{id}/consultas" : {
       "post" : {
-        "description" : "Registra la consulta de un interesado. Un departamento VENDIDO no recibe consultas (409 `DEPARTAMENTO_NO_DISPONIBLE`). La respuesta no devuelve los datos personales enviados.",
+        "description" : "Registra la consulta de un interesado. Un departamento VENDIDO no recibe consultas (409 `DEPARTAMENTO_NO_DISPONIBLE`), y el mismo email no puede consultar dos veces por el mismo departamento en 24 horas (409 `CONSULTA_DUPLICADA`). La respuesta no devuelve los datos personales enviados.",
         "operationId" : "crearConsulta",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -842,12 +842,34 @@
         "content" : {
           "application/json" : {
             "examples" : {
+              "avisoDuplicado" : {
+                "summary" : "Departamento duplicado",
+                "value" : {
+                  "error" : "AVISO_DUPLICADO",
+                  "message" : "Ya hay un departamento publicado en la misma dirección (calle, número, piso y unidad)",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
               "concurrencia" : {
                 "summary" : "Modificación simultánea",
                 "value" : {
                   "error" : "CONCURRENT_MODIFICATION",
                   "message" : "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
                   "path" : "/api/v1/departamentos/7",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "consultaDuplicada" : {
+                "summary" : "Consulta duplicada",
+                "value" : {
+                  "error" : "CONSULTA_DUPLICADA",
+                  "message" : "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas",
+                  "path" : "/api/v1/departamentos/7/consultas",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1118,7 +1140,7 @@
           "error" : {
             "type" : "string",
             "description" : "Código estable del error. Los clientes pueden depender de él; el mensaje es solo informativo.",
-            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "TRANSICION_DE_ESTADO_INVALIDA", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
+            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "TRANSICION_DE_ESTADO_INVALIDA", "AVISO_DUPLICADO", "CONSULTA_DUPLICADA", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
           },
           "fieldErrors" : {
             "type" : "object",

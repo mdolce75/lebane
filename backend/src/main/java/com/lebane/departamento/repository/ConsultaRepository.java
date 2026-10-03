@@ -1,5 +1,7 @@
 package com.lebane.departamento.repository;
 
+import java.time.Instant;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,4 +16,12 @@ public interface ConsultaRepository extends JpaRepository<Consulta, Long> {
 
     /** Usado por el seed para agregar solo las consultas de ejemplo que faltan (el email las identifica). */
     boolean existsByDepartamentoIdAndEmail(Long departamentoId, String email);
+
+    /**
+     * Regla de consultas duplicadas: ¿el email ya consultó por el departamento desde {@code desde}? Sin distinguir
+     * mayúsculas ({@code upper(email)}); con muchas consultas por departamento la resuelve
+     * {@code ix_consulta_departamento_email}.
+     */
+    boolean existsByDepartamentoIdAndEmailIgnoreCaseAndCreatedAtAfter(Long departamentoId, String email,
+            Instant desde);
 }

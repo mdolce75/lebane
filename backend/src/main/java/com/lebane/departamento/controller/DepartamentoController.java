@@ -95,7 +95,8 @@ public class DepartamentoController {
     @Operation(summary = "Crear un departamento",
             description = "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica "
                     + "`estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 "
-                    + "`TRANSICION_DE_ESTADO_INVALIDA`). Las fotos se suben después, de a una, con el endpoint de "
+                    + "`TRANSICION_DE_ESTADO_INVALIDA`), ni repetir la dirección (calle, número, piso, unidad, ciudad y provincia) de "
+                    + "otro departamento publicado (409 `AVISO_DUPLICADO`). Las fotos se suben después, de a una, con el endpoint de "
                     + "imágenes.")
     @ApiResponse(responseCode = "201", description = "Departamento creado",
             headers = {
@@ -144,7 +145,8 @@ public class DepartamentoController {
                     + "ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de "
                     + "pisar sus cambios. Reglas de estado: DISPONIBLE ⇄ RESERVADO y ambos → VENDIDO; un departamento "
                     + "VENDIDO no se puede modificar (409 `DEPARTAMENTO_NO_DISPONIBLE`) y un cambio de estado no "
-                    + "permitido responde 409 `TRANSICION_DE_ESTADO_INVALIDA`.")
+                    + "permitido responde 409 `TRANSICION_DE_ESTADO_INVALIDA`. Si cambia la dirección, no puede "
+                    + "coincidir con la de otro departamento publicado (409 `AVISO_DUPLICADO`).")
     @ApiResponse(responseCode = "200", description = "Departamento actualizado",
             headers = @Header(name = HttpHeaders.ETAG, description = "Nueva versión del departamento",
                     schema = @Schema(type = "string", example = "\"4\"")))
@@ -172,7 +174,9 @@ public class DepartamentoController {
     @Tag(name = OpenApiConfig.TAG_CONSULTAS)
     @Operation(summary = "Enviar una consulta",
             description = "Registra la consulta de un interesado. Un departamento VENDIDO no recibe consultas (409 "
-                    + "`DEPARTAMENTO_NO_DISPONIBLE`). La respuesta no devuelve los datos personales enviados.")
+                    + "`DEPARTAMENTO_NO_DISPONIBLE`), y el mismo email no puede consultar dos veces por el mismo departamento "
+                    + "en 24 horas (409 `CONSULTA_DUPLICADA`). La respuesta no devuelve los datos personales "
+                    + "enviados.")
     @ApiResponse(responseCode = "201", description = "Consulta registrada")
     @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
     @ApiResponse(responseCode = "404", ref = NOT_FOUND)

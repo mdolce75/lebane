@@ -13,11 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.entity.Departamento;
+import com.lebane.departamento.entity.Direccion;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
 import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
 import com.lebane.departamento.repository.DepartamentoRepository;
+import com.lebane.departamento.repository.DepartamentoSpecifications;
 import com.lebane.departamento.repository.ImagenRepository;
 import com.lebane.exception.BusinessRuleException;
 import com.lebane.exception.ErrorCode;
@@ -59,8 +61,9 @@ public class DepartamentoService {
             throw new BusinessRuleException(ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
                     "Un departamento no se puede publicar directamente como vendido");
         }
-        Departamento departamento = departamentoRepository.saveAndFlush(
-                mapper.toNewEntity(request, codigoGenerator.generate()));
+        Departamento nuevo = mapper.toNewEntity(request, codigoGenerator.generate());
+        validarDireccionLibre(nuevo.getDireccion(), null);
+        Departamento departamento = departamentoRepository.saveAndFlush(nuevo);
         log.info("Departamento creado", kv("departamentoId", departamento.getId()),
                 kv("codigo", departamento.getCodigo()));
         // Recién creado: sin imágenes ni consultas.
@@ -81,6 +84,11 @@ public class DepartamentoService {
             throw new PreconditionFailedException();
         }
         validarCambio(departamento.getEstado(), request.estado());
+        // Solo si cambia la dirección: un aviso cargado antes de la regla sigue siendo editable.
+        Direccion direccion = DepartamentoMapper.toDireccion(request.direccion());
+        if (!direccion.mismaUbicacion(departamento.getDireccion())) {
+            validarDireccionLibre(direccion, id);
+        }
         mapper.applyUpdate(departamento, request);
         // Flush explícito: incrementa la versión ahora, para devolverla en la respuesta y el ETag.
         departamentoRepository.flush();
@@ -100,6 +108,19 @@ public class DepartamentoService {
 
     private Departamento buscar(Long id) {
         return departamentoRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException(RECURSO));
+    }
+
+    /**
+     * Regla de avisos duplicados: no puede haber dos departamentos publicados (no vendidos) en la misma unidad física.
+     * Se controla en el servicio y no con un índice único porque una base existente puede tener duplicados cargados
+     * antes de la regla, y la migración fallaría; dos altas idénticas simultáneas podrían pasar ambas el control.
+     */
+    private void validarDireccionLibre(Direccion direccion, Long excluirId) {
+        if (departamentoRepository.exists(
+                DepartamentoSpecifications.publicadoEnLaMismaDireccion(direccion, excluirId))) {
+            throw new BusinessRuleException(ErrorCode.AVISO_DUPLICADO,
+                    "Ya hay un departamento publicado en la misma dirección (calle, número, piso y unidad)");
+        }
     }
 
     /**

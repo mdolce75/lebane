@@ -107,10 +107,11 @@ public class DepartamentoMapper {
                 request.dormitorios(),
                 request.banos(),
                 request.superficieM2(),
-                toEntity(request.direccion()));
+                toDireccion(request.direccion()));
     }
 
-    private static Direccion toEntity(DireccionRequest request) {
+    /** Dirección normalizada (textos recortados; opcionales vacíos como {@code null}). */
+    public static Direccion toDireccion(DireccionRequest request) {
         return new Direccion(
                 requerido(request.calle()),
                 requerido(request.numero()),

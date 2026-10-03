@@ -2,6 +2,9 @@ package com.lebane.departamento.service;
 
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
+import java.time.Clock;
+import java.time.Duration;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,21 +21,29 @@ import com.lebane.exception.BusinessRuleException;
 import com.lebane.exception.ErrorCode;
 import com.lebane.exception.ResourceNotFoundException;
 
-/** Registro de consultas de interesados. Los datos personales nunca se registran en logs. */
+/**
+ * Registro de consultas de interesados. Los datos personales nunca se registran en logs.
+ *
+ * <p>Reglas: un departamento vendido no recibe consultas, y el mismo email no consulta dos veces por el mismo
+ * departamento en {@link #VENTANA_DUPLICADOS} (evita dobles envíos y spam).
+ */
 @Service
 public class ConsultaService {
 
     private static final Logger log = LoggerFactory.getLogger(ConsultaService.class);
+    static final Duration VENTANA_DUPLICADOS = Duration.ofHours(24);
 
     private final DepartamentoRepository departamentoRepository;
     private final ConsultaRepository consultaRepository;
     private final ConsultaMapper mapper;
+    private final Clock clock;
 
     public ConsultaService(DepartamentoRepository departamentoRepository, ConsultaRepository consultaRepository,
-            ConsultaMapper mapper) {
+            ConsultaMapper mapper, Clock clock) {
         this.departamentoRepository = departamentoRepository;
         this.consultaRepository = consultaRepository;
         this.mapper = mapper;
+        this.clock = clock;
     }
 
     @Transactional
@@ -43,7 +54,16 @@ public class ConsultaService {
             throw new BusinessRuleException(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE,
                     "El departamento ya no está disponible y no recibe nuevas consultas");
         }
-        Consulta consulta = consultaRepository.saveAndFlush(mapper.toEntity(departamento, request));
+        // Bloquea la fila del departamento hasta el commit: dos envíos simultáneos (doble click, reintento) se
+        // serializan y el segundo ve la consulta del primero.
+        departamentoRepository.lockById(departamentoId);
+        Consulta nueva = mapper.toEntity(departamento, request);
+        if (consultaRepository.existsByDepartamentoIdAndEmailIgnoreCaseAndCreatedAtAfter(departamentoId,
+                nueva.getEmail(), clock.instant().minus(VENTANA_DUPLICADOS))) {
+            throw new BusinessRuleException(ErrorCode.CONSULTA_DUPLICADA,
+                    "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas");
+        }
+        Consulta consulta = consultaRepository.saveAndFlush(nueva);
         log.info("Consulta registrada", kv("departamentoId", departamentoId), kv("consultaId", consulta.getId()));
         return mapper.toCreatedResponse(consulta, departamentoId);
     }

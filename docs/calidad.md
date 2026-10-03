@@ -72,13 +72,14 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/R
 | `ActuatorEndpointsIT` | con PostgreSQL real (Testcontainers): health/liveness/readiness 200 `{"status":"UP"}`, métricas Hikari/HTTP |
 | `RequestValidationTest` | reglas de cada campo, `dormitorios < ambientes`, coordenadas completas, consultas, `toString` sin datos personales |
 | `DepartamentoMapperTest` | normalización de textos, estado por defecto, edición sin estado, URLs de imágenes |
-| `DepartamentoServiceTest`, `ConsultaServiceTest` | alta, detalle con consultas dedicadas, `If-Match`, 404, reglas del ciclo de vida (no publicar como vendido, vendido no editable, transiciones, 412 antes que 409) |
+| `DepartamentoServiceTest`, `ConsultaServiceTest` | alta, detalle con consultas dedicadas, `If-Match`, 404, reglas del ciclo de vida (no publicar como vendido, vendido no editable, transiciones, 412 antes que 409), avisos y consultas duplicados (con el lock antes del control) |
+| `DireccionTest` | criterio de "misma dirección": sin mayúsculas, sin código postal ni coordenadas, piso y unidad cuentan |
 | `EstadoDepartamentoTest`, frontend `estadoReglas.test.ts` | matriz de transiciones de estado, vendido como registro cerrado (mismas reglas en backend y frontend) |
 | `DepartamentoControllerTest` | contrato HTTP (201 + `Location` relativo + `ETag`, 412, 409, 404, 405, 415, 503, 500) y esquema `ApiError` sin detalles internos |
 | `EntityMappingRulesTest` | ninguna relación EAGER ni colección mapeada |
 | `EntityTagsTest`, `CodigoDepartamentoGeneratorTest`, `SeedDataTest` | ETags, formato de códigos, seed válido |
 | `PersistenceIT` | Flyway + validación de esquema, auditoría, versión, `CHECK`/`UNIQUE` en la base (máx. 5 fotos, dormitorios, código), orden de imágenes, relaciones LAZY |
-| `DepartamentoApiIT` | ciclo HTTP completo contra PostgreSQL, `If-Match`, consultas, errores y **3 sentencias SQL fijas en el detalle** (sin N+1) |
+| `DepartamentoApiIT` | ciclo HTTP completo contra PostgreSQL, `If-Match`, consultas, reglas de estado y de duplicados, errores y **3 sentencias SQL fijas en el detalle** (sin N+1) |
 | `DevDataSeederIT` | seed al arrancar, idempotente, sin pisar ediciones |
 | `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, moneda obligatoria para precio, ventana máxima |
 | `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |

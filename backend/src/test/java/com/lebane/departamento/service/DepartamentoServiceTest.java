@@ -15,12 +15,16 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.lebane.departamento.TestFixtures;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
+import com.lebane.departamento.dto.DepartamentoRequest;
+import com.lebane.departamento.dto.DireccionRequest;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
@@ -196,6 +200,63 @@ class DepartamentoServiceTest {
             assertThat(service.actualizar(5L, TestFixtures.departamento(3, 2, destino), Set.of()).estado())
                     .isEqualTo(destino);
         }
+    }
+
+    @Test
+    void crearEnLaDireccionDeOtroPublicadoEsDuplicadoYNoGuardaNada() {
+        when(codigoGenerator.generate()).thenReturn("DEP-ABCDEFGH");
+        when(departamentoRepository.exists(cualquierSpec())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.crear(TestFixtures.departamento()))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.AVISO_DUPLICADO));
+        verify(departamentoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void editarSinCambiarLaDireccionNoBuscaDuplicados() {
+        // Un aviso cargado antes de la regla, con la dirección repetida, sigue siendo editable.
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(persisted(5L, 2L)));
+
+        service.actualizar(5L, TestFixtures.departamento(4, 3, null), Set.of());
+
+        verify(departamentoRepository, never()).exists(cualquierSpec());
+    }
+
+    @Test
+    void editarHaciaLaDireccionDeOtroPublicadoEsDuplicadoYNoCambiaNada() {
+        Departamento departamento = persisted(5L, 2L);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(departamento));
+        when(departamentoRepository.exists(cualquierSpec())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.actualizar(5L, enLaUnidad(TestFixtures.departamento(), "C"), Set.of()))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.AVISO_DUPLICADO));
+        assertThat(departamento.getDireccion().getUnidad()).isEqualTo("B");
+        verify(departamentoRepository, never()).flush();
+    }
+
+    @Test
+    void editarHaciaUnaDireccionLibreSeAplica() {
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(persisted(5L, 2L)));
+
+        DepartamentoDetailResponse response = service.actualizar(5L, enLaUnidad(TestFixtures.departamento(), "C"),
+                Set.of());
+
+        assertThat(response.direccion().unidad()).isEqualTo("C");
+        verify(departamentoRepository).exists(cualquierSpec());
+    }
+
+    private static Specification<Departamento> cualquierSpec() {
+        return ArgumentMatchers.<Specification<Departamento>>any();
+    }
+
+    private static DepartamentoRequest enLaUnidad(DepartamentoRequest r, String unidad) {
+        DireccionRequest d = r.direccion();
+        return new DepartamentoRequest(r.titulo(), r.descripcion(), r.precio(), r.moneda(), r.ambientes(),
+                r.dormitorios(), r.banos(), r.superficieM2(), r.estado(), new DireccionRequest(d.calle(), d.numero(),
+                        d.piso(), unidad, d.ciudad(), d.provincia(), d.codigoPostal(), d.latitud(), d.longitud(),
+                        d.placeId()));
     }
 
     private Departamento persisted(Long id, long version) {
