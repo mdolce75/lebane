@@ -29,10 +29,10 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 | Método | Ruta | Descripción | Respuestas |
 |---|---|---|---|
 | `GET` | `/api/v1/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
-| `POST` | `/api/v1/departamentos` | Alta (no como `VENDIDO`) | `201` + `Location` + `ETag` · `400` · `409` |
+| `POST` | `/api/v1/departamentos` | Alta (no como `VENDIDO` ni en la dirección de otro publicado) | `201` + `Location` + `ETag` · `400` · `409` |
 | `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas) | `200` + `ETag` · `400` · `404` |
 | `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional; un `VENDIDO` no se edita | `200` + `ETag` · `400` · `404` · `409` · `412` |
-| `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido) |
+| `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido o repetida) |
 | `POST` | `/api/v1/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](arquitectura.md#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
 | `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` · `409` (vendido) |
 | `GET` | `/api/v1/direcciones/autocompletar?q=` | Autocompletado de direcciones ([detalle](arquitectura.md#autocompletado-de-direcciones)) | `200` · `400` |
@@ -101,6 +101,20 @@ DISPONIBLE ⇄ RESERVADO
 - Las reglas viven en el enum (`transicionesPermitidas`, `esModificable`, `admiteAlta`) y se aplican en los servicios;
   el frontend las replica para no ofrecer opciones que el backend va a rechazar.
 
+**Duplicados**:
+
+- **Avisos**: no puede haber dos departamentos publicados (`DISPONIBLE` o `RESERVADO`) en la misma unidad física:
+  calle, número, piso, unidad, ciudad y provincia, sin distinguir mayúsculas (`409 AVISO_DUPLICADO`). No se comparan
+  código postal ni coordenadas, que pueden cargarse o no. Al editar, se controla solo si cambia la dirección, así un
+  aviso cargado antes de la regla sigue siendo editable. Un departamento vendido libera la dirección.
+- **Consultas**: el mismo email (sin distinguir mayúsculas) no consulta dos veces por el mismo departamento en 24 horas
+  (`409 CONSULTA_DUPLICADA`). Evita dobles envíos y spam. El control bloquea la fila del departamento
+  (`SELECT … FOR UPDATE`), así que dos envíos simultáneos no pasan ambos.
+- La consulta de duplicados es type-safe (Criteria API y método derivado de Spring Data) y usa índices propios
+  (`V3__indices_reglas_duplicados.sql`). La regla de avisos no es un índice único a propósito: una base existente puede
+  tener duplicados de antes y la migración fallaría. El costo es que dos altas idénticas exactamente simultáneas
+  podrían pasar ambas.
+
 **Consultas** (`ConsultaRequest`): `nombre` (obligatorio, ≤ 100), `email` (obligatorio, válido), `telefono`
 (opcional, `+`, dígitos, espacios, guiones y paréntesis, 6..30), `mensaje` (10..2000). Un departamento `VENDIDO`
 no recibe consultas (`409 DEPARTAMENTO_NO_DISPONIBLE`). La respuesta solo incluye `id`, `departamentoId` y
@@ -151,6 +165,8 @@ Todas las respuestas de error (validación, dominio, Spring MVC, Spring Security
 | `CONCURRENT_MODIFICATION` | 409 | Conflicto de concurrencia optimista |
 | `DEPARTAMENTO_NO_DISPONIBLE` | 409 | Regla de negocio: un departamento vendido no se edita, no cambia sus fotos ni recibe consultas |
 | `TRANSICION_DE_ESTADO_INVALIDA` | 409 | Regla de negocio: cambio de estado no permitido (p. ej. publicar directamente como vendido) |
+| `AVISO_DUPLICADO` | 409 | Regla de negocio: ya hay un departamento publicado en la misma dirección |
+| `CONSULTA_DUPLICADA` | 409 | Regla de negocio: el mismo email ya consultó por el departamento en las últimas 24 horas |
 | `LIMITE_IMAGENES_ALCANZADO` | 409 | El departamento ya tiene 5 fotos |
 | `STORAGE_UNAVAILABLE` | 503 | MinIO caído, lento, con el circuito abierto o mal configurado (detalle técnico solo en logs) |
 | `PRECONDITION_FAILED` | 412 | `If-Match` desactualizado |

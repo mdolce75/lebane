@@ -149,7 +149,7 @@ public final class DepartamentoSpecifications {
     /**
      * Regla de avisos duplicados: un departamento publicado (no vendido) en la misma unidad física que
      * {@code direccion} (ver {@link Direccion#mismaUbicacion}), sin distinguir mayúsculas. {@code excluirId} deja
-     * afuera al propio departamento al editarlo. Se resuelve con {@code ix_departamento_direccion}.
+     * afuera al propio departamento al editarlo. Con volumen, la resuelve {@code ix_departamento_direccion}.
      */
     public static Specification<Departamento> publicadoEnLaMismaDireccion(Direccion direccion, Long excluirId) {
         return (root, query, cb) -> {
