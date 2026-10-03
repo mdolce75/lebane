@@ -110,7 +110,7 @@ DISPONIBLE ⇄ RESERVADO
 - **Consultas**: el mismo email (sin distinguir mayúsculas) no consulta dos veces por el mismo departamento en 24 horas
   (`409 CONSULTA_DUPLICADA`). Evita dobles envíos y spam. El control bloquea la fila del departamento
   (`SELECT … FOR UPDATE`), así que dos envíos simultáneos no pasan ambos.
-- La consulta de duplicados es type-safe (Criteria API y método derivado de Spring Data) y usa índices propios
+- La consulta de duplicados es type-safe (Criteria API y metamodelo) y usa índices propios
   (`V3__indices_reglas_duplicados.sql`). La regla de avisos no es un índice único a propósito: una base existente puede
   tener duplicados de antes y la migración fallaría. El costo es que dos altas idénticas exactamente simultáneas
   podrían pasar ambas.
@@ -239,10 +239,15 @@ formato de página es el estándar de Spring Data (`PagedModel`).
              (subconsultas escalares correlacionadas, cada una resuelta con un índice)
 ```
 
-**Sin consultas escritas como texto**: página, filtros, orden, total y agregados se construyen con la Criteria API y
-el metamodelo estático (`Departamento_`, `Imagen_`, ...). Ni `@Query` con JPQL/SQL, ni `createQuery(String)`, ni
-SQL nativo, ni concatenación de cadenas; los nombres de atributos tampoco van en texto. `ListadoSinConsultasDeTextoTest`
-hace fallar el build si el código del listado vuelve a tener una consulta de texto.
+**Sin consultas escritas como texto, en todo el backend**: página, filtros, orden, total y agregados del listado, y
+también las demás consultas (fotos y consultas de un departamento, reglas de negocio, bloqueo de fila, seed), se
+construyen con la Criteria API y el metamodelo estático (`Departamento_`, `Imagen_`, ...). Ni `@Query` con JPQL/SQL,
+ni `createQuery(String)`, ni SQL nativo, ni concatenación de cadenas; los nombres de atributos tampoco van en texto.
+Tampoco hay consultas derivadas del nombre del método: los repositorios exponen métodos `default` sobre
+Specifications (`ImagenSpecifications`, `ConsultaSpecifications`, `DepartamentoSpecifications`) y fragmentos
+implementados con Criteria (`DepartamentoListadoRepositoryImpl`, `DepartamentoClaveRepositoryImpl`).
+`SinConsultasDeTextoTest` hace fallar el build si aparece una consulta de texto en cualquier archivo del backend o un
+método de consulta abstracto en un repositorio.
 
 - **Sin full scans**: cada filtro y orden usa un índice (ver [Validación de performance](#validación-de-performance)).
 - **Sin N+1**: la cantidad de consultas no depende del tamaño de página ni de las fotos o consultas

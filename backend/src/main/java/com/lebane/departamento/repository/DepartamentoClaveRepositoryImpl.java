@@ -8,6 +8,7 @@ import com.lebane.departamento.entity.Departamento_;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
@@ -21,15 +22,22 @@ class DepartamentoClaveRepositoryImpl implements DepartamentoClaveRepository {
 
     @Override
     public Optional<Long> findIdByCodigo(String codigo) {
-        return entityManager.createQuery(idDonde(Departamento_.codigo, codigo)).getResultStream().findFirst();
+        return primero(entityManager.createQuery(idDonde(Departamento_.codigo, codigo)));
     }
 
     @Override
     public Optional<Long> lockById(Long id) {
-        return entityManager.createQuery(idDonde(Departamento_.id, id))
-                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
-                .getResultStream()
-                .findFirst();
+        return primero(entityManager.createQuery(idDonde(Departamento_.id, id))
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE));
+    }
+
+    /**
+     * Ambos filtros son claves únicas: a lo sumo una fila. Con {@code getResultList()} y no {@code getResultStream()},
+     * porque fuera de una transacción (el seed) la sesión se cierra al volver del método y el stream quedaría leyendo
+     * un ResultSet cerrado.
+     */
+    private static Optional<Long> primero(TypedQuery<Long> query) {
+        return query.getResultList().stream().findFirst();
     }
 
     /** {@code select d.id from Departamento d where d.<atributo> = :valor}. */
