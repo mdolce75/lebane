@@ -59,7 +59,7 @@
             "description" : "Estados a incluir; repetir el parámetro para varios (estado=DISPONIBLE&estado=RESERVADO)",
             "items" : {
               "type" : "string",
-              "description" : "Estado comercial. VENDIDO no recibe nuevas consultas.",
+              "description" : "Estado comercial. Transiciones: DISPONIBLE ⇄ RESERVADO y ambos → VENDIDO. VENDIDO es final: no se edita, no cambia sus fotos ni recibe consultas, y no se puede publicar directamente como vendido.",
               "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ]
             }
           }
@@ -242,7 +242,7 @@
         "tags" : [ "Departamentos" ]
       },
       "post" : {
-        "description" : "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. Las fotos se suben después, de a una, con el endpoint de imágenes.",
+        "description" : "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 `TRANSICION_DE_ESTADO_INVALIDA`). Las fotos se suben después, de a una, con el endpoint de imágenes.",
         "operationId" : "crear",
         "parameters" : [ {
           "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
@@ -303,6 +303,9 @@
           "400" : {
             "$ref" : "#/components/responses/BadRequest"
           },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
+          },
           "415" : {
             "$ref" : "#/components/responses/UnsupportedMediaType"
           },
@@ -319,7 +322,7 @@
     },
     "/api/v1/departamentos/{departamentoId}/imagenes" : {
       "post" : {
-        "description" : "Una foto por request, en `multipart/form-data` con el archivo en el campo `archivo`. El tipo se detecta por el **contenido** (JPEG, PNG o WebP), no por la extensión ni por el Content-Type declarado: un archivo que no es imagen responde 400. Máximo 5 MB por foto y 5 fotos por departamento (409 `LIMITE_IMAGENES_ALCANZADO`). La primera foto es la principal. Si el storage no está disponible responde 503 `STORAGE_UNAVAILABLE` y no queda nada a medias.",
+        "description" : "Una foto por request, en `multipart/form-data` con el archivo en el campo `archivo`. El tipo se detecta por el **contenido** (JPEG, PNG o WebP), no por la extensión ni por el Content-Type declarado: un archivo que no es imagen responde 400. Máximo 5 MB por foto y 5 fotos por departamento (409 `LIMITE_IMAGENES_ALCANZADO`). Un departamento VENDIDO no admite cambios en sus fotos (409 `DEPARTAMENTO_NO_DISPONIBLE`). La primera foto es la principal. Si el storage no está disponible responde 503 `STORAGE_UNAVAILABLE` y no queda nada a medias.",
         "operationId" : "subir",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -407,7 +410,7 @@
     },
     "/api/v1/departamentos/{departamentoId}/imagenes/{imagenId}" : {
       "delete" : {
-        "description" : "Elimina la foto del departamento. Si el storage no está disponible, la foto se elimina igual (deja de verse en la aplicación) y el archivo queda registrado en los logs como huérfano para limpiarlo después.",
+        "description" : "Elimina la foto del departamento. Si el storage no está disponible, la foto se elimina igual (deja de verse en la aplicación) y el archivo queda registrado en los logs como huérfano para limpiarlo después. Un departamento VENDIDO no admite cambios en sus fotos (409 `DEPARTAMENTO_NO_DISPONIBLE`).",
         "operationId" : "eliminar",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -459,6 +462,9 @@
           },
           "404" : {
             "$ref" : "#/components/responses/NotFound"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
           },
           "500" : {
             "$ref" : "#/components/responses/InternalError"
@@ -541,7 +547,7 @@
         "tags" : [ "Departamentos" ]
       },
       "put" : {
-        "description" : "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de pisar sus cambios.",
+        "description" : "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de pisar sus cambios. Reglas de estado: DISPONIBLE ⇄ RESERVADO y ambos → VENDIDO; un departamento VENDIDO no se puede modificar (409 `DEPARTAMENTO_NO_DISPONIBLE`) y un cambio de estado no permitido responde 409 `TRANSICION_DE_ESTADO_INVALIDA`.",
         "operationId" : "actualizar",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -858,12 +864,34 @@
                   "timestamp" : "2026-10-01T12:00:00Z"
                 }
               },
+              "transicion" : {
+                "summary" : "Cambio de estado no permitido",
+                "value" : {
+                  "error" : "TRANSICION_DE_ESTADO_INVALIDA",
+                  "message" : "Un departamento no se puede publicar directamente como vendido",
+                  "path" : "/api/v1/departamentos",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
               "vendido" : {
                 "summary" : "Departamento vendido",
                 "value" : {
                   "error" : "DEPARTAMENTO_NO_DISPONIBLE",
                   "message" : "El departamento ya no está disponible y no recibe nuevas consultas",
                   "path" : "/api/v1/departamentos/7/consultas",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "vendidoNoModificable" : {
+                "summary" : "Departamento vendido: no se modifica",
+                "value" : {
+                  "error" : "DEPARTAMENTO_NO_DISPONIBLE",
+                  "message" : "El departamento ya fue vendido y no se puede modificar",
+                  "path" : "/api/v1/departamentos/7",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1090,7 +1118,7 @@
           "error" : {
             "type" : "string",
             "description" : "Código estable del error. Los clientes pueden depender de él; el mensaje es solo informativo.",
-            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
+            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "TRANSICION_DE_ESTADO_INVALIDA", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
           },
           "fieldErrors" : {
             "type" : "object",

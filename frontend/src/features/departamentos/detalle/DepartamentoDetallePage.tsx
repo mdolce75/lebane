@@ -6,6 +6,7 @@ import { formatArea, formatDateTime, formatPrice, plural } from '../../../shared
 import { useDepartamento } from '../api/queries';
 import { ConsultaForm } from '../consultas/ConsultaForm';
 import { EstadoBadge } from '../EstadoBadge';
+import { esModificable } from '../estadoReglas';
 import { Galeria } from './Galeria';
 import { NoEncontrado } from './NoEncontrado';
 
@@ -42,7 +43,7 @@ export function DepartamentoDetallePage() {
             {d.codigo} · <EstadoBadge estado={d.estado} />
           </p>
         </div>
-        <Link to={`/departamentos/${d.id}/editar`} className="button">Editar</Link>
+        {esModificable(d.estado) && <Link to={`/departamentos/${d.id}/editar`} className="button">Editar</Link>}
       </div>
 
       <div className="detail__layout">

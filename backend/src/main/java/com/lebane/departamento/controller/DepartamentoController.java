@@ -94,7 +94,9 @@ public class DepartamentoController {
     @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
     @Operation(summary = "Crear un departamento",
             description = "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica "
-                    + "`estado`, queda DISPONIBLE. Las fotos se suben después, de a una, con el endpoint de imágenes.")
+                    + "`estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 "
+                    + "`TRANSICION_DE_ESTADO_INVALIDA`). Las fotos se suben después, de a una, con el endpoint de "
+                    + "imágenes.")
     @ApiResponse(responseCode = "201", description = "Departamento creado",
             headers = {
                 @Header(name = HttpHeaders.LOCATION, description = "Ruta relativa del departamento creado",
@@ -103,6 +105,7 @@ public class DepartamentoController {
                         schema = @Schema(type = "string", example = "\"0\""))
             })
     @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "409", ref = CONFLICT)
     @ApiResponse(responseCode = "415", ref = UNSUPPORTED_MEDIA_TYPE)
     @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
     @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
@@ -139,7 +142,9 @@ public class DepartamentoController {
     @Operation(summary = "Editar un departamento",
             description = "Reemplazo completo de los datos (no modifica fotos ni consultas). Enviar en `If-Match` el "
                     + "ETag obtenido al leerlo: si otro usuario lo modificó desde entonces, responde 412 en lugar de "
-                    + "pisar sus cambios.")
+                    + "pisar sus cambios. Reglas de estado: DISPONIBLE ⇄ RESERVADO y ambos → VENDIDO; un departamento "
+                    + "VENDIDO no se puede modificar (409 `DEPARTAMENTO_NO_DISPONIBLE`) y un cambio de estado no "
+                    + "permitido responde 409 `TRANSICION_DE_ESTADO_INVALIDA`.")
     @ApiResponse(responseCode = "200", description = "Departamento actualizado",
             headers = @Header(name = HttpHeaders.ETAG, description = "Nueva versión del departamento",
                     schema = @Schema(type = "string", example = "\"4\"")))

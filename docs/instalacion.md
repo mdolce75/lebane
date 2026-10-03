@@ -189,4 +189,6 @@ departamentos ficticios en distintas ciudades y estados, con consultas de ejempl
   (`SeedConsultas`): nombres, mensajes y teléfonos variados, emails en `example.com`. Son determinísticas y se
   identifican por su email (`nombre.apellido.s0001-03@example.com`), así que el seeder agrega solo las que faltan:
   también completa bases creadas con un seed anterior, reiniciar no las duplica y nunca toca consultas reales.
+- **Ciclo de vida**: un aviso que termina vendido (`SEED-0005`) se crea DISPONIBLE, recibe fotos y consultas y se
+  vende al final del seed, igual que en la realidad (no se publica como vendido ni cambia sus fotos una vez vendido).
 - Los datos pasan las mismas validaciones que la API (`SeedDataTest`, `SeedConsultasTest`).

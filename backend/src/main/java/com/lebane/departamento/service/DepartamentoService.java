@@ -13,11 +13,14 @@ import org.springframework.transaction.annotation.Transactional;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.entity.Departamento;
+import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
 import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
 import com.lebane.departamento.repository.DepartamentoRepository;
 import com.lebane.departamento.repository.ImagenRepository;
+import com.lebane.exception.BusinessRuleException;
+import com.lebane.exception.ErrorCode;
 import com.lebane.exception.PreconditionFailedException;
 import com.lebane.exception.ResourceNotFoundException;
 
@@ -52,6 +55,10 @@ public class DepartamentoService {
 
     @Transactional
     public DepartamentoDetailResponse crear(DepartamentoRequest request) {
+        if (request.estado() != null && !request.estado().admiteAlta()) {
+            throw new BusinessRuleException(ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
+                    "Un departamento no se puede publicar directamente como vendido");
+        }
         Departamento departamento = departamentoRepository.saveAndFlush(
                 mapper.toNewEntity(request, codigoGenerator.generate()));
         log.info("Departamento creado", kv("departamentoId", departamento.getId()),
@@ -73,6 +80,7 @@ public class DepartamentoService {
         if (!versionesEsperadas.isEmpty() && !versionesEsperadas.contains(departamento.getVersion())) {
             throw new PreconditionFailedException();
         }
+        validarCambio(departamento.getEstado(), request.estado());
         mapper.applyUpdate(departamento, request);
         // Flush explícito: incrementa la versión ahora, para devolverla en la respuesta y el ETag.
         departamentoRepository.flush();
@@ -92,5 +100,20 @@ public class DepartamentoService {
 
     private Departamento buscar(Long id) {
         return departamentoRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException(RECURSO));
+    }
+
+    /**
+     * Reglas del ciclo de vida ({@link EstadoDepartamento}): un departamento vendido no se modifica, y el estado solo
+     * puede cambiar por una transición permitida. Si el request no informa estado, se conserva el actual.
+     */
+    private static void validarCambio(EstadoDepartamento actual, EstadoDepartamento nuevo) {
+        if (!actual.esModificable()) {
+            throw new BusinessRuleException(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE,
+                    "El departamento ya fue vendido y no se puede modificar");
+        }
+        if (nuevo != null && !actual.puedeCambiarA(nuevo)) {
+            throw new BusinessRuleException(ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
+                    "No se puede pasar de " + actual + " a " + nuevo);
+        }
     }
 }

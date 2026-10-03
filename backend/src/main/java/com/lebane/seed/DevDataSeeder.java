@@ -2,6 +2,9 @@ package com.lebane.seed;
 
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -14,6 +17,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.lebane.departamento.dto.ConsultaRequest;
 import com.lebane.departamento.entity.Departamento;
+import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.mapper.ConsultaMapper;
 import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
@@ -68,17 +72,36 @@ public class DevDataSeeder implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         int creados = 0;
         int existentes = 0;
+        List<String> aVender = new ArrayList<>();
         for (SeedDepartamento seed : SeedData.departamentos()) {
             if (insertarSiNoExiste(seed)) {
                 creados++;
+                if (!seed.estadoFinal().admiteAlta()) {
+                    aVender.add(seed.codigo());
+                }
             } else {
                 existentes++;
             }
         }
         int fotos = agregarFotos();
         int consultas = agregarConsultas();
+        marcarVendidos(aVender);
         log.info("Seed de desarrollo aplicado", kv("creados", creados), kv("existentes", existentes),
-                kv("fotos", fotos), kv("consultas", consultas));
+                kv("fotos", fotos), kv("consultas", consultas), kv("vendidos", aVender.size()));
+    }
+
+    /**
+     * Respeta el ciclo de vida: un aviso no se publica como vendido ni cambia sus fotos una vez vendido. Los avisos
+     * del seed que terminan VENDIDO se crean DISPONIBLE, reciben fotos y consultas, y recién al final pasan a
+     * VENDIDO (DISPONIBLE → VENDIDO es una transición permitida). Solo los creados en esta ejecución: un aviso que
+     * ya existía no se toca.
+     */
+    private void marcarVendidos(List<String> codigos) {
+        for (String codigo : codigos) {
+            transactionTemplate.executeWithoutResult(status -> departamentoRepository.findIdByCodigo(codigo)
+                    .flatMap(departamentoRepository::findById)
+                    .ifPresent(departamento -> departamento.cambiarEstado(EstadoDepartamento.VENDIDO)));
+        }
     }
 
     /** Cantidad de fotos de ejemplo por departamento: de 0 a 3 (algunos sin fotos muestran el placeholder). */
@@ -92,6 +115,11 @@ public class DevDataSeeder implements ApplicationRunner {
             int cantidad = fotosPara(seed.codigo());
             Long id = departamentoRepository.findIdByCodigo(seed.codigo()).orElse(null);
             if (cantidad == 0 || id == null || imagenRepository.countByDepartamentoId(id) > 0) {
+                continue;
+            }
+            // Un aviso ya vendido no cambia sus fotos (regla de negocio). Pasa si el storage no estaba disponible
+            // cuando se creó: queda sin fotos de ejemplo, pero el arranque no falla.
+            if (departamentoRepository.findById(id).map(d -> !d.getEstado().esModificable()).orElse(true)) {
                 continue;
             }
             try {
@@ -145,7 +173,7 @@ public class DevDataSeeder implements ApplicationRunner {
                     return false;
                 }
                 Departamento departamento = departamentoRepository.save(
-                        departamentoMapper.toNewEntity(seed.datos(), seed.codigo()));
+                        departamentoMapper.toNewEntity(seed.datosDeAlta(), seed.codigo()));
                 seed.consultas().forEach(consulta ->
                         consultaRepository.save(consultaMapper.toEntity(departamento, consulta)));
                 return true;

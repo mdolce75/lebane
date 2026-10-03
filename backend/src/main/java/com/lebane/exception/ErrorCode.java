@@ -24,6 +24,8 @@ public enum ErrorCode {
     UNSUPPORTED_MEDIA_TYPE,
     /** Regla de negocio: el departamento no admite la operación en su estado actual (p. ej. vendido). */
     DEPARTAMENTO_NO_DISPONIBLE,
+    /** Regla de negocio: el cambio de estado no está permitido (p. ej. salir de VENDIDO, o publicar como vendido). */
+    TRANSICION_DE_ESTADO_INVALIDA,
     /** Regla de negocio: el departamento ya tiene el máximo de fotos. */
     LIMITE_IMAGENES_ALCANZADO,
     /** El storage de imágenes no está disponible (caído, timeout, circuito abierto o mal configurado). */

@@ -16,6 +16,21 @@ import com.lebane.departamento.entity.Moneda;
 final class SeedData {
 
     record SeedDepartamento(String codigo, DepartamentoRequest datos, List<ConsultaRequest> consultas) {
+
+        /** Estado con el que el aviso tiene que quedar al terminar el seed. */
+        EstadoDepartamento estadoFinal() {
+            return datos.estado() != null ? datos.estado() : EstadoDepartamento.DISPONIBLE;
+        }
+
+        /** Datos para crearlo: un aviso que termina vendido se publica DISPONIBLE y se vende al final del seed. */
+        DepartamentoRequest datosDeAlta() {
+            if (estadoFinal().admiteAlta()) {
+                return datos;
+            }
+            return new DepartamentoRequest(datos.titulo(), datos.descripcion(), datos.precio(), datos.moneda(),
+                    datos.ambientes(), datos.dormitorios(), datos.banos(), datos.superficieM2(),
+                    EstadoDepartamento.DISPONIBLE, datos.direccion());
+        }
     }
 
     private SeedData() {

@@ -72,7 +72,8 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/R
 | `ActuatorEndpointsIT` | con PostgreSQL real (Testcontainers): health/liveness/readiness 200 `{"status":"UP"}`, métricas Hikari/HTTP |
 | `RequestValidationTest` | reglas de cada campo, `dormitorios < ambientes`, coordenadas completas, consultas, `toString` sin datos personales |
 | `DepartamentoMapperTest` | normalización de textos, estado por defecto, edición sin estado, URLs de imágenes |
-| `DepartamentoServiceTest`, `ConsultaServiceTest` | alta, detalle con consultas dedicadas, `If-Match`, 404, regla de vendido |
+| `DepartamentoServiceTest`, `ConsultaServiceTest` | alta, detalle con consultas dedicadas, `If-Match`, 404, reglas del ciclo de vida (no publicar como vendido, vendido no editable, transiciones, 412 antes que 409) |
+| `EstadoDepartamentoTest`, frontend `estadoReglas.test.ts` | matriz de transiciones de estado, vendido como registro cerrado (mismas reglas en backend y frontend) |
 | `DepartamentoControllerTest` | contrato HTTP (201 + `Location` relativo + `ETag`, 412, 409, 404, 405, 415, 503, 500) y esquema `ApiError` sin detalles internos |
 | `EntityMappingRulesTest` | ninguna relación EAGER ni colección mapeada |
 | `EntityTagsTest`, `CodigoDepartamentoGeneratorTest`, `SeedDataTest` | ETags, formato de códigos, seed válido |

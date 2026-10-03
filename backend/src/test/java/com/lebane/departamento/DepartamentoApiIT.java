@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.context.ImportTestcontainers;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.LinkedMultiValueMap;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -114,9 +116,8 @@ class DepartamentoApiIT {
 
     @Test
     void soldDepartamentoRejectsConsultas() throws Exception {
-        String vendido = TestFixtures.departamentoJson().replace("}\n}", "},\n  \"estado\": \"VENDIDO\"\n}");
-        long id = objectMapper.readTree(rest.exchange(BASE, HttpMethod.POST, json(vendido), String.class).getBody())
-                .path("id").asLong();
+        long id = crearDisponible();
+        assertThat(cambiarEstado(id, "VENDIDO").getStatusCode()).isEqualTo(HttpStatus.OK);
 
         ResponseEntity<String> response = rest.exchange(BASE + "/" + id + "/consultas", HttpMethod.POST,
                 json(TestFixtures.consultaJson()), String.class);
@@ -124,6 +125,61 @@ class DepartamentoApiIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(objectMapper.readTree(response.getBody()).path("error").asText())
                 .isEqualTo("DEPARTAMENTO_NO_DISPONIBLE");
+    }
+
+    /** Ciclo de vida por HTTP: DISPONIBLE ⇄ RESERVADO → VENDIDO, y VENDIDO es un registro cerrado. */
+    @Test
+    void lifecycleRulesAreEnforcedOverHttp() throws Exception {
+        // No se publica directamente como vendido.
+        ResponseEntity<String> altaVendido = rest.exchange(BASE, HttpMethod.POST, json(conEstado("VENDIDO")),
+                String.class);
+        assertThat(altaVendido.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(objectMapper.readTree(altaVendido.getBody()).path("error").asText())
+                .isEqualTo("TRANSICION_DE_ESTADO_INVALIDA");
+
+        long id = crearDisponible();
+        assertThat(cambiarEstado(id, "RESERVADO").getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(cambiarEstado(id, "DISPONIBLE").getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(cambiarEstado(id, "VENDIDO").getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Vendido: no vuelve a otro estado, no se edita (ni siquiera sin cambiar el estado) y sus fotos no cambian.
+        for (String estado : new String[] {"DISPONIBLE", "VENDIDO"}) {
+            ResponseEntity<String> edicion = cambiarEstado(id, estado);
+            assertThat(edicion.getStatusCode()).as(estado).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(objectMapper.readTree(edicion.getBody()).path("error").asText())
+                    .isEqualTo("DEPARTAMENTO_NO_DISPONIBLE");
+        }
+        HttpHeaders multipart = new HttpHeaders();
+        multipart.setContentType(MediaType.MULTIPART_FORM_DATA);
+        LinkedMultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        form.add("archivo", new ByteArrayResource(new byte[] {(byte) 0x89, 'P', 'N', 'G'}) {
+            @Override
+            public String getFilename() {
+                return "foto.png";
+            }
+        });
+        ResponseEntity<String> foto = rest.exchange(BASE + "/" + id + "/imagenes", HttpMethod.POST,
+                new HttpEntity<>(form, multipart), String.class);
+        assertThat(foto.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(objectMapper.readTree(foto.getBody()).path("error").asText()).isEqualTo("DEPARTAMENTO_NO_DISPONIBLE");
+
+        JsonNode detalle = objectMapper.readTree(rest.getForEntity(BASE + "/" + id, String.class).getBody());
+        assertThat(detalle.path("estado").asText()).isEqualTo("VENDIDO");
+    }
+
+    private long crearDisponible() throws Exception {
+        ResponseEntity<String> created = rest.exchange(BASE, HttpMethod.POST, json(TestFixtures.departamentoJson()),
+                String.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return objectMapper.readTree(created.getBody()).path("id").asLong();
+    }
+
+    private ResponseEntity<String> cambiarEstado(long id, String estado) {
+        return rest.exchange(BASE + "/" + id, HttpMethod.PUT, json(conEstado(estado)), String.class);
+    }
+
+    private static String conEstado(String estado) {
+        return TestFixtures.departamentoJson().replace("}\n}", "},\n  \"estado\": \"" + estado + "\"\n}");
     }
 
     @Test

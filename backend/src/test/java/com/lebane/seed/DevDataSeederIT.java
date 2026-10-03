@@ -71,6 +71,15 @@ class DevDataSeederIT {
     }
 
     @Test
+    void losAvisosQueTerminanVendidosQuedanVendidos() {
+        // Se crean DISPONIBLE (no se publica como vendido), reciben fotos y consultas y se venden al final del seed.
+        SeedData.departamentos().forEach(seed -> assertThat(jdbcTemplate.queryForObject(
+                "select estado from departamento where codigo = ?", String.class, seed.codigo()))
+                .as(seed.codigo()).isEqualTo(seed.estadoFinal().name()));
+        assertThat(SeedData.departamentos()).anyMatch(seed -> !seed.estadoFinal().admiteAlta());
+    }
+
+    @Test
     void existingSeedIsNotOverwritten() {
         jdbcTemplate.update("update departamento set titulo = 'Editado a mano' where codigo = 'SEED-0001'");
 

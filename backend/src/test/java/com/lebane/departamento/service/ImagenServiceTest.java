@@ -63,7 +63,8 @@ class ImagenServiceTest {
                 new DepartamentoMapper(new PublicBucketImageUrlResolver(
                         TestStorageProperties.of("http://cdn", "bucket"))),
                 new TransactionTemplate(transactionManager), TestStorageProperties.of("http://cdn", "bucket"));
-        when(departamentoRepository.existsById(ID)).thenReturn(true);
+        when(departamentoRepository.findById(ID))
+                .thenReturn(Optional.of(new Departamento("DEP-X", EstadoDepartamento.DISPONIBLE)));
         when(departamentoRepository.lockById(ID)).thenReturn(Optional.of(ID));
         when(departamentoRepository.getReferenceById(ID))
                 .thenReturn(new Departamento("DEP-X", EstadoDepartamento.DISPONIBLE));
@@ -92,7 +93,7 @@ class ImagenServiceTest {
 
     @Test
     void missingDepartamentoFailsBeforeTouchingStorage() {
-        when(departamentoRepository.existsById(ID)).thenReturn(false);
+        when(departamentoRepository.findById(ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.subir(ID, png(), 1024)).isInstanceOf(ResourceNotFoundException.class);
         verify(storage, never()).upload(anyString(), any(), anyLong(), anyString());
@@ -190,6 +191,42 @@ class ImagenServiceTest {
 
         assertThatThrownBy(() -> service.eliminar(ID, 3L)).isInstanceOf(ResourceNotFoundException.class);
         verify(storage, never()).delete(anyString());
+    }
+
+    @Test
+    void unDepartamentoVendidoNoAdmiteFotosNuevasYNoTocaElStorage() {
+        when(departamentoRepository.findById(ID))
+                .thenReturn(Optional.of(new Departamento("DEP-X", EstadoDepartamento.VENDIDO)));
+
+        assertThatThrownBy(() -> service.subir(ID, png(), 1024))
+                .isInstanceOf(BusinessRuleException.class)
+                .extracting(e -> ((BusinessRuleException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE);
+        verify(storage, never()).upload(anyString(), any(), anyLong(), anyString());
+        verify(imagenRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void unDepartamentoVendidoNoPermiteEliminarFotos() {
+        Imagen imagen = new Imagen(new Departamento("DEP-X", EstadoDepartamento.VENDIDO), "departamentos/7/a.png",
+                "image/png", 10, 0);
+        when(imagenRepository.findByIdAndDepartamentoId(3L, ID)).thenReturn(Optional.of(imagen));
+
+        assertThatThrownBy(() -> service.eliminar(ID, 3L))
+                .isInstanceOf(BusinessRuleException.class)
+                .extracting(e -> ((BusinessRuleException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE);
+        verify(imagenRepository, never()).delete(any());
+        verify(storage, never()).delete(anyString());
+    }
+
+    @Test
+    void unDepartamentoReservadoSiAdmiteCambiosEnSusFotos() {
+        when(departamentoRepository.findById(ID))
+                .thenReturn(Optional.of(new Departamento("DEP-X", EstadoDepartamento.RESERVADO)));
+        when(imagenRepository.findPosiciones(ID)).thenReturn(List.of());
+
+        assertThat(service.subir(ID, png(), 1024).posicion()).isZero();
     }
 
     private static ByteArrayResource png() {

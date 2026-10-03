@@ -55,7 +55,8 @@ public class ImagenController {
             description = "Una foto por request, en `multipart/form-data` con el archivo en el campo `archivo`. El "
                     + "tipo se detecta por el **contenido** (JPEG, PNG o WebP), no por la extensión ni por el "
                     + "Content-Type declarado: un archivo que no es imagen responde 400. Máximo 5 MB por foto y 5 "
-                    + "fotos por departamento (409 `LIMITE_IMAGENES_ALCANZADO`). La primera foto es la principal. Si "
+                    + "fotos por departamento (409 `LIMITE_IMAGENES_ALCANZADO`). Un departamento VENDIDO no admite "
+                    + "cambios en sus fotos (409 `DEPARTAMENTO_NO_DISPONIBLE`). La primera foto es la principal. Si "
                     + "el storage no está disponible responde 503 `STORAGE_UNAVAILABLE` y no queda nada a medias.")
     @ApiResponse(responseCode = "201", description = "Foto guardada")
     @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
@@ -77,10 +78,12 @@ public class ImagenController {
     @Operation(summary = "Eliminar una foto",
             description = "Elimina la foto del departamento. Si el storage no está disponible, la foto se elimina "
                     + "igual (deja de verse en la aplicación) y el archivo queda registrado en los logs como "
-                    + "huérfano para limpiarlo después.")
+                    + "huérfano para limpiarlo después. Un departamento VENDIDO no admite cambios en sus fotos (409 "
+                    + "`DEPARTAMENTO_NO_DISPONIBLE`).")
     @ApiResponse(responseCode = "204", description = "Foto eliminada")
     @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
     @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "409", ref = CONFLICT)
     @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
     @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
     public void eliminar(

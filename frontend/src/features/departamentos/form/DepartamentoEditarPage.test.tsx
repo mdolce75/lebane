@@ -74,4 +74,25 @@ describe('Edición de departamento', () => {
     const actuales = screen.getByRole('list', { name: 'Fotos actuales' });
     expect(within(actuales).getAllByRole('listitem').length).toBeGreaterThan(0);
   });
+  it('un departamento vendido no se puede editar: avisa y no muestra el formulario ni las fotos', async () => {
+    const api = mockApi().on('GET', DETALLE, detalle({ estado: 'VENDIDO' }));
+    renderRoute('/departamentos/1/editar');
+
+    const aviso = await screen.findByRole('alert');
+    expect(aviso).toHaveTextContent('Este departamento ya fue vendido.');
+    expect(within(aviso).getByRole('link', { name: 'Volver al detalle' })).toHaveAttribute('href', '/departamentos/1');
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Agregar fotos')).not.toBeInTheDocument();
+    expect(api.requests('PUT', DETALLE)).toHaveLength(0);
+  });
+
+  it('ofrece solo los estados permitidos desde el actual', async () => {
+    mockApi().on('GET', DETALLE, detalle({ estado: 'RESERVADO' }));
+    renderRoute('/departamentos/1/editar');
+
+    const estado = await screen.findByLabelText(/^Estado/);
+    const opciones = within(estado).getAllByRole('option').map((o) => o.textContent);
+    expect(opciones).toEqual(['Disponible', 'Reservado', 'Vendido']);
+    expect(estado).toHaveValue('RESERVADO');
+  });
 });

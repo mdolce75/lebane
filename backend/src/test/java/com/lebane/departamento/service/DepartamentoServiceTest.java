@@ -28,6 +28,8 @@ import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
 import com.lebane.departamento.repository.DepartamentoRepository;
 import com.lebane.departamento.repository.ImagenRepository;
+import com.lebane.exception.BusinessRuleException;
+import com.lebane.exception.ErrorCode;
 import com.lebane.exception.PreconditionFailedException;
 import com.lebane.exception.ResourceNotFoundException;
 import com.lebane.storage.TestStorageProperties;
@@ -134,6 +136,66 @@ class DepartamentoServiceTest {
 
         assertThatThrownBy(() -> service.actualizar(99L, TestFixtures.departamento(), Set.of()))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void crearComoVendidoEsUnaTransicionInvalidaYNoGuardaNada() {
+        assertThatThrownBy(() -> service.crear(TestFixtures.departamento(3, 2, EstadoDepartamento.VENDIDO)))
+                .isInstanceOf(BusinessRuleException.class)
+                .extracting(e -> ((BusinessRuleException) e).getErrorCode())
+                .isEqualTo(ErrorCode.TRANSICION_DE_ESTADO_INVALIDA);
+        verifyNoInteractions(departamentoRepository, codigoGenerator);
+    }
+
+    @Test
+    void crearComoReservadoEstaPermitido() {
+        when(codigoGenerator.generate()).thenReturn("DEP-RESERVAD");
+        when(departamentoRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.crear(TestFixtures.departamento(3, 2, EstadoDepartamento.RESERVADO)).estado())
+                .isEqualTo(EstadoDepartamento.RESERVADO);
+    }
+
+    @Test
+    void unDepartamentoVendidoNoSeModificaNiSinCambiarElEstado() {
+        Departamento vendido = persisted(5L, 2L);
+        vendido.cambiarEstado(EstadoDepartamento.VENDIDO);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(vendido));
+
+        for (EstadoDepartamento nuevo : new EstadoDepartamento[] {null, EstadoDepartamento.VENDIDO,
+                EstadoDepartamento.DISPONIBLE}) {
+            assertThatThrownBy(() -> service.actualizar(5L, TestFixtures.departamento(4, 3, nuevo), Set.of()))
+                    .as("estado nuevo %s", nuevo)
+                    .isInstanceOf(BusinessRuleException.class)
+                    .extracting(e -> ((BusinessRuleException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE);
+        }
+        assertThat(vendido.getAmbientes()).isEqualTo(3);
+        assertThat(vendido.getEstado()).isEqualTo(EstadoDepartamento.VENDIDO);
+        verify(departamentoRepository, never()).flush();
+    }
+
+    @Test
+    void laVersionDesactualizadaSeInformaAntesQueLaReglaDeVendido() {
+        Departamento vendido = persisted(5L, 2L);
+        vendido.cambiarEstado(EstadoDepartamento.VENDIDO);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(vendido));
+
+        // 412 primero: el cliente recarga y ve el estado actual (vendido) en lugar de un error sin contexto.
+        assertThatThrownBy(() -> service.actualizar(5L, TestFixtures.departamento(), Set.of(1L)))
+                .isInstanceOf(PreconditionFailedException.class);
+    }
+
+    @Test
+    void lasTransicionesPermitidasSeAplican() {
+        Departamento departamento = persisted(5L, 2L);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(departamento));
+
+        for (EstadoDepartamento destino : new EstadoDepartamento[] {EstadoDepartamento.RESERVADO,
+                EstadoDepartamento.DISPONIBLE, EstadoDepartamento.RESERVADO, EstadoDepartamento.VENDIDO}) {
+            assertThat(service.actualizar(5L, TestFixtures.departamento(3, 2, destino), Set.of()).estado())
+                    .isEqualTo(destino);
+        }
     }
 
     private Departamento persisted(Long id, long version) {
