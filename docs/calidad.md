@@ -43,8 +43,8 @@ cd frontend && npm run test:coverage   # v8 -> frontend/coverage/index.html
 
 | Suite | Tests | Líneas | Ramas |
 |---|---|---|---|
-| Backend (unitarios + IT) | 252 (209 + 43) | 92,5 % | 74,9 % |
-| Frontend (Vitest) | 99 | 96,5 % | 89,8 % |
+| Backend (unitarios + IT) | 298 (250 + 48) | 93,6 % | 76,9 % |
+| Frontend (Vitest) | 105 | 96,4 % | 89,9 % |
 | E2E (Playwright, stack real) | 7 | — | — |
 
 La cobertura se mide y se publica, pero no se impone un umbral que haga fallar el build: un porcentaje mínimo
@@ -140,7 +140,8 @@ GitHub Actions ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) en ca
 ## Validación final
 
 Fase 7, sobre el stack Docker reconstruido desde cero (`docker compose down` + `up -d --build`), además de la
-compilación limpia y todas las suites:
+compilación limpia y todas las suites. Los números de tests son los de ese momento; los actuales están en
+[Cobertura](#cobertura):
 
 | Verificación | Resultado |
 |---|---|

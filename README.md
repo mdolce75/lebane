@@ -146,8 +146,8 @@ flowchart LR
 
 | | Tests | Cobertura de líneas |
 |---|---|---|
-| Backend | 221 unitarios + 43 de integración (PostgreSQL y MinIO reales con Testcontainers) | 93 % (JaCoCo) |
-| Frontend | 99 (Vitest + Testing Library) | 97 % (v8) |
+| Backend | 250 unitarios + 48 de integración (PostgreSQL y MinIO reales con Testcontainers) | 94 % (JaCoCo) |
+| Frontend | 105 (Vitest + Testing Library) | 96 % (v8) |
 | E2E | 7 escenarios en Chromium contra el stack completo | — |
 
 El **CI** ([GitHub Actions](.github/workflows/ci.yml)) corre todo en cada PR, incluidos los E2E con
