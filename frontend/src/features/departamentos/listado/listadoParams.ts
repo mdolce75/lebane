@@ -68,7 +68,8 @@ export function parseListadoParams(search: URLSearchParams): ListadoParams {
     .getAll('estado')
     .map((value) => estadoSchema.safeParse(value))
     .flatMap((result) => (result.success ? [result.data] : []));
-  const params: ListadoParams = { ...parsed, estado: [...new Set(estado)] };
+  // Con los dados de baja, el estado no aplica (una URL armada a mano con los dos no los combina).
+  const params: ListadoParams = { ...parsed, estado: parsed.dadosDeBaja ? [] : [...new Set(estado)] };
   // El precio solo se filtra con moneda (ARS y USD no son comparables): sin moneda, se ignora.
   if (!params.moneda) {
     params.precioMin = undefined;

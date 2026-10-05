@@ -2,16 +2,25 @@ import { useState } from 'react';
 import { isHttpError } from '../../../shared/api/errors';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { formatDateTime } from '../../../shared/format/format';
+import type { Estado } from '../api/schemas';
+import { ESTADO_LABELS } from '../estadoLabels';
 import { useReactivarDepartamento } from '../api/queries';
 
-type Props = { id: number; version: number; fechaBaja: string; onReactivado: () => void; onRecargar: () => void };
+type Props = {
+  id: number;
+  version: number;
+  fechaBaja: string;
+  estado: Estado;
+  onReactivado: () => void;
+  onRecargar: () => void;
+};
 
 /**
  * Aviso de un departamento dado de baja, con la opción de reactivarlo. Envía la versión mostrada (412 si otro usuario
  * lo cambió). Si mientras tanto se publicó otro aviso en la misma dirección, el backend responde 409 y se muestra su
  * mensaje.
  */
-export function ReactivarDepartamento({ id, version, fechaBaja, onReactivado, onRecargar }: Props) {
+export function ReactivarDepartamento({ id, version, fechaBaja, estado, onReactivado, onRecargar }: Props) {
   const reactivar = useReactivarDepartamento(id);
   const [conflicto, setConflicto] = useState(false);
 
@@ -28,7 +37,10 @@ export function ReactivarDepartamento({ id, version, fechaBaja, onReactivado, on
   return (
     <div className="alert alert--warning" role="alert">
       <strong>Dado de baja el {formatDateTime(fechaBaja)}.</strong>
-      <p>No aparece en el listado ni admite cambios. Sus fotos y consultas se conservan.</p>
+      <p>
+        No aparece en el listado ni admite cambios. Sus fotos y consultas se conservan. Al reactivarlo vuelve a
+        estar <strong>{ESTADO_LABELS[estado].toLowerCase()}</strong>.
+      </p>
       {conflicto && <p>Otro usuario lo modificó. Recargalo antes de reactivarlo.</p>}
       <div className="alert__actions">
         {conflicto ? (

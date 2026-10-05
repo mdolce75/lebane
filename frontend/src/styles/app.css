@@ -72,6 +72,7 @@ fieldset.field { border: none; padding: 0; margin: 0; }
 }
 .checkbox:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-tint); color: var(--color-primary); }
 .checkbox input { accent-color: var(--color-primary); margin: 0; width: auto; padding: 0; }
+fieldset:disabled .checkbox { opacity: 0.45; cursor: not-allowed; }
 
 .form { display: flex; flex-direction: column; gap: 1.25rem; }
 .form__section {

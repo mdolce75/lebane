@@ -135,6 +135,8 @@ describe('Detalle de departamento', () => {
 
     const aviso = await screen.findByRole('alert');
     expect(aviso).toHaveTextContent(/Dado de baja el/);
+    expect(aviso).toHaveTextContent('Al reactivarlo vuelve a estar disponible.');
+    expect(screen.queryByText('Disponible')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dar de baja' })).not.toBeInTheDocument();
     expect(screen.queryByRole('form', { name: 'Consulta' })).not.toBeInTheDocument();

@@ -45,8 +45,7 @@ export function DepartamentoDetallePage() {
         <div>
           <h1>{d.titulo}</h1>
           <p className="muted">
-            {d.codigo} · <EstadoBadge estado={d.estado} />
-            {d.fechaBaja && <> <span className="badge badge--baja">Dado de baja</span></>}
+            {d.codigo} · <EstadoBadge estado={d.estado} fechaBaja={d.fechaBaja} />
           </p>
         </div>
         {/* Dado de baja: no admite cambios; la única acción es reactivarlo (aviso de abajo). */}
@@ -68,7 +67,7 @@ export function DepartamentoDetallePage() {
         <p className="alert alert--success" role="status">Departamento reactivado: vuelve a estar publicado.</p>
       )}
       {d.fechaBaja && (
-        <ReactivarDepartamento id={d.id} version={d.version} fechaBaja={d.fechaBaja}
+        <ReactivarDepartamento id={d.id} version={d.version} fechaBaja={d.fechaBaja} estado={d.estado}
           onReactivado={() => setReactivado(true)} onRecargar={() => void refetch()} />
       )}
 

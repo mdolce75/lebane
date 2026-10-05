@@ -122,10 +122,21 @@ describe('Listado de departamentos', () => {
     await screen.findByText('1 departamento');
     expect(screen.queryByText('Dado de baja')).not.toBeInTheDocument();
 
+    await userEvent.click(screen.getByLabelText('Reservado'));
     await userEvent.click(screen.getByLabelText('Ver solo los dados de baja'));
+    // El estado no aplica a los dados de baja: se limpia y no se puede elegir.
+    expect(screen.getByLabelText('Reservado')).not.toBeChecked();
+    expect(screen.getByLabelText('Reservado')).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }));
 
-    expect(await screen.findByText('Dado de baja')).toBeInTheDocument();
+    const tarjeta = (await screen.findByText('Dado de baja')).closest('article')!;
+    // Una sola etiqueta: no se muestra como "Disponible" aunque conserve ese estado para la reactivación.
+    expect(within(tarjeta).queryByText('Disponible')).not.toBeInTheDocument();
     expect(api.requests('GET', LISTADO).at(-1)!.url.searchParams.get('dadosDeBaja')).toBe('true');
+    expect(api.requests('GET', LISTADO).at(-1)!.url.searchParams.getAll('estado')).toEqual([]);
+
+    // Al quitar el filtro, el estado se vuelve a poder elegir.
+    await userEvent.click(screen.getByLabelText('Ver solo los dados de baja'));
+    expect(screen.getByLabelText('Reservado')).toBeEnabled();
   });
 });

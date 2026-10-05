@@ -40,6 +40,9 @@ describe('parseListadoParams', () => {
     expect(parse('dadosDeBaja=true').dadosDeBaja).toBe(true);
     expect(parse('dadosDeBaja=false').dadosDeBaja).toBeUndefined();
     expect(toSearchParams({ dadosDeBaja: true }).toString()).toBe('dadosDeBaja=true');
+    expect(parse('dadosDeBaja=true&estado=DISPONIBLE').estado).toEqual([]);
+    expect(paramsFromFiltros(filtrosSchema.parse({ ...vacioForm, estado: ['VENDIDO'], dadosDeBaja: true })).estado)
+      .toEqual([]);
     expect(paramsFromFiltros(filtrosSchema.parse({ ...vacioForm, dadosDeBaja: true })).dadosDeBaja).toBe(true);
   });
 

@@ -62,7 +62,8 @@ export function paramsFromFiltros(form: FiltrosForm): Partial<ListadoParams> {
   return {
     q: form.q || undefined,
     ciudad: form.ciudad || undefined,
-    estado: form.estado,
+    // Con los dados de baja, el estado no aplica.
+    estado: form.dadosDeBaja ? [] : form.estado,
     moneda: form.moneda || undefined,
     precioMin: toNumber(form.precioMin),
     precioMax: toNumber(form.precioMax),
