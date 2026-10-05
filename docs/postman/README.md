@@ -1,7 +1,7 @@
 # Colección de Postman
 
 [`lebane.postman_collection.json`](lebane.postman_collection.json) recorre toda la API, en orden. Cada request trae
-tests, así que la colección completa funciona como una prueba de punta a punta del backend: 38 requests y 74
+tests, así que la colección completa funciona como una prueba de punta a punta del backend: 46 requests y 89
 verificaciones.
 
 | Carpeta | Qué prueba |
