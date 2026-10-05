@@ -18,6 +18,7 @@ import com.lebane.departamento.entity.Imagen_;
 import com.lebane.departamento.entity.Moneda;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
@@ -33,6 +34,9 @@ public final class DepartamentoSpecifications {
 
     /** Carácter de escape de LIKE; {@link #escaparLike(String)} usa el mismo. */
     static final char ESCAPE = '\\';
+
+    /** Función de PostgreSQL que quita acentos ({@code V6__busqueda_sin_acentos.sql}). */
+    static final String SIN_ACENTOS = "f_unaccent";
 
     private DepartamentoSpecifications() {
     }
@@ -58,7 +62,8 @@ public final class DepartamentoSpecifications {
     }
 
     /**
-     * {@code lower(titulo) LIKE '%texto%' ESCAPE '\'}, resuelto con el índice GIN de trigramas. Los comodines del
+     * {@code f_unaccent(lower(titulo)) LIKE f_unaccent('%texto%') ESCAPE '\'}: sin distinguir mayúsculas ni acentos
+     * ("balcon" encuentra "balcón"), resuelto con el índice GIN de trigramas sobre esa expresión. Los comodines del
      * usuario ({@code %}, {@code _}) se escapan: buscar "50%" busca el literal. El carácter de escape se declara
      * explícitamente porque, si no, Hibernate genera {@code ESCAPE ''}, que en PostgreSQL desactiva el escape.
      */
@@ -67,7 +72,17 @@ public final class DepartamentoSpecifications {
             return null;
         }
         String patron = "%" + escaparLike(texto.toLowerCase(Locale.ROOT)) + "%";
-        return (root, query, cb) -> cb.like(cb.lower(root.get(Departamento_.titulo)), patron, ESCAPE);
+        return (root, query, cb) -> cb.like(sinAcentos(cb, cb.lower(root.get(Departamento_.titulo))),
+                sinAcentos(cb, cb.literal(patron)), ESCAPE);
+    }
+
+    /**
+     * {@code f_unaccent(texto)}: quita acentos y diéresis (también la tilde de la ñ), con la misma función en la columna
+     * y en el patrón, así ambos lados se normalizan igual. Función inmutable definida en {@code V6__busqueda_sin_acentos}
+     * sobre la extensión {@code unaccent}; el índice de trigramas usa la misma expresión.
+     */
+    private static Expression<String> sinAcentos(CriteriaBuilder cb, Expression<String> texto) {
+        return cb.function(SIN_ACENTOS, String.class, texto);
     }
 
     /** {@code lower(ciudad) = ?}, resuelto con el índice de expresión {@code lower(ciudad)}. */

@@ -80,7 +80,8 @@ departamento 1 ──── 0..N consulta    (FK consulta.departamento_id, @Many
   `@Version`.
 - Índices del listado (`V2__indices_listado.sql`): uno por orden admitido, con el desempate por `id` al final
   (`(created_at, id)`, `(estado, created_at, id)`, `(lower(ciudad), created_at, id)`, `(moneda, precio, id)`,
-  `(superficie_m2, id)`) y un GIN de trigramas sobre `lower(titulo)` para la búsqueda de texto. Ver
+  `(superficie_m2, id)`) y un GIN de trigramas sobre `f_unaccent(lower(titulo))` para la búsqueda de texto sin
+  distinguir mayúsculas ni acentos. Ver
   [Validación de performance](api.md#validación-de-performance).
 
 ## Imágenes y MinIO
