@@ -1,13 +1,6 @@
-# Decisiones técnicas y limitaciones
+# Decisiones técnicas
 
 [← Volver al README](../README.md)
-
-- [Decisiones técnicas](#decisiones-técnicas)
-- [Limitaciones conocidas](#limitaciones-conocidas)
-
----
-
-## Decisiones técnicas
 
 - **Spring Boot 3.5.x + Java 21**, virtual threads habilitados (`spring.threads.virtual.enabled`).
 - **Maven Wrapper** (`backend/mvnw`, Maven 3.9.11, la misma línea que la imagen de build de Docker): no requiere Maven instalado.
@@ -93,38 +86,3 @@
   (`IMAGES_ORIGIN`), así la política sigue a `STORAGE_PUBLIC_URL` sin reconstruir la imagen.
 - **Healthcheck del frontend contra `127.0.0.1`**: dentro del contenedor `localhost` resuelve primero a `::1` y
   nginx escucha solo en IPv4.
-
-## Limitaciones conocidas
-
-- `/actuator/health` (raíz) incluye `"groups":["liveness","readiness"]`: es el comportamiento estándar de Spring
-  Boot con grupos de health y solo expone nombres, no detalles. Liveness y readiness devuelven exactamente
-  `{"status":"UP"}`.
-- Con `LOGSTASH_ENABLED=true` y Logstash caído, el aviso de conexión aparece como evento JSON al primer fallo; el
-  appender de logstash-logback-encoder deja de reportar los reintentos siguientes. Los eventos de la caída se
-  retienen en memoria y se envían al reconectar (validado: 50 de 50); los que excedan el buffer (8.192) o los
-  pendientes si el backend se reinicia durante la caída se pierden en Logstash, pero siempre quedan en stdout.
-- Los E2E crean datos reales en la base contra la que corren (con prefijo `E2E…`): la API no permite borrar
-  departamentos. Conviene correrlos contra un entorno de desarrollo o de pruebas, no contra uno con datos reales.
-- Las URLs mal formadas (`%` suelto, `%2F` codificado) las rechaza Tomcat antes de llegar a la aplicación, con su
-  página HTML genérica de 400 (sin versión ni detalles, pero sin requestId ni formato `ApiError`). Los rechazos del
-  firewall de Spring Security sí responden `ApiError` en JSON.
-- Las fotos no se pueden reordenar ni elegir cuál es la principal (es la primera subida que sigue existiendo).
-- Objetos huérfanos: si falla el borrado compensatorio o el borrado en MinIO después de eliminar la fila, el objeto
-  queda en el bucket (registrado en ERROR/WARN con su `objectKey`, inaccesible desde la aplicación). Falta un job
-  de reconciliación periódico (listar objetos sin fila en `imagen`).
-- Las fotos se validan por firma binaria, no se decodifican ni se re-encodean: un archivo con firma PNG válida pero
-  contenido corrupto se acepta (el navegador mostrará el placeholder de imagen rota). No se generan miniaturas.
-- El estado de los circuit breakers es por instancia del backend (en memoria); con varias réplicas, cada una abre y
-  cierra su propio circuito.
-- Georef es un servicio público sin SLA y con límites de uso; para producción con tráfico alto convendría cache de
-  sugerencias o un proveedor con contrato.
-- Paginación por `OFFSET`, limitada a los primeros 10.000 resultados de cada búsqueda. Para recorridos completos
-  (exportaciones, scroll infinito profundo) convendría paginación por cursor (*keyset*), fuera del alcance.
-- La búsqueda de texto distingue acentos (`balcon` no encuentra `balcón`) y solo busca en el título. Ignorar acentos
-  requiere `unaccent` con un wrapper `IMMUTABLE` indexable; queda como mejora.
-- El total exacto (`totalElements`) de una búsqueda poco selectiva cuesta O(n) sobre un índice (16 ms con 100k
-  filas). Con varios millones de filas convendría un total estimado o un `COUNT` acotado.
-- La API de dominio es pública (el desafío no define usuarios ni roles). Cualquier cliente puede crear y editar
-  departamentos; agregar autenticación de usuarios queda fuera del alcance.
-- `ConsultaRequest.email` usa la validación de `@Email` de Hibernate Validator (sintáctica); no se verifica que el
-  buzón exista.
