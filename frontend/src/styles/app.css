@@ -137,6 +137,7 @@ fieldset.field { border: none; padding: 0; margin: 0; }
 }
 .badge--disponible { background: var(--color-success-bg); color: var(--color-success); }
 .badge--reservado { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge--baja { background: var(--color-bg-soft); color: var(--color-muted); }
 .badge--vendido { background: var(--color-danger-bg); color: var(--color-danger); }
 
 .empty-state {

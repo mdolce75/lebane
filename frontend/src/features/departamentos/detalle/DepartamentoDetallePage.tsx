@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { isHttpError } from '../../../shared/api/errors';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
@@ -5,6 +6,7 @@ import { Spinner } from '../../../shared/components/Spinner';
 import { formatArea, formatDateTime, formatPrice, plural } from '../../../shared/format/format';
 import { useDepartamento } from '../api/queries';
 import { BajaDepartamento } from './BajaDepartamento';
+import { ReactivarDepartamento } from './ReactivarDepartamento';
 import { ConsultaForm } from '../consultas/ConsultaForm';
 import { EstadoBadge } from '../EstadoBadge';
 import { esModificable } from '../estadoReglas';
@@ -15,6 +17,7 @@ export function DepartamentoDetallePage() {
   const id = Number(useParams().id);
   const aviso = (useLocation().state as { aviso?: string } | null)?.aviso;
   const navigate = useNavigate();
+  const [reactivado, setReactivado] = useState(false);
   const { data: d, isPending, isError, error, refetch } = useDepartamento(id);
 
   if (!Number.isInteger(id) || id <= 0) return <NoEncontrado />;
@@ -43,18 +46,31 @@ export function DepartamentoDetallePage() {
           <h1>{d.titulo}</h1>
           <p className="muted">
             {d.codigo} · <EstadoBadge estado={d.estado} />
+            {d.fechaBaja && <> <span className="badge badge--baja">Dado de baja</span></>}
           </p>
         </div>
-        <div className="page-header__actions">
-          {esModificable(d.estado) && <Link to={`/departamentos/${d.id}/editar`} className="button">Editar</Link>}
-          <BajaDepartamento
-            id={d.id}
-            version={d.version}
-            codigo={d.codigo}
-            onBaja={() => navigate('/departamentos', { state: { aviso: `Departamento ${d.codigo} dado de baja` } })}
-          />
-        </div>
+        {/* Dado de baja: no admite cambios; la única acción es reactivarlo (aviso de abajo). */}
+        {!d.fechaBaja && (
+          <div className="page-header__actions">
+            {esModificable(d.estado) && <Link to={`/departamentos/${d.id}/editar`} className="button">Editar</Link>}
+            <BajaDepartamento
+              id={d.id}
+              version={d.version}
+              codigo={d.codigo}
+              onBaja={() => navigate('/departamentos', { state: { aviso: `Departamento ${d.codigo} dado de baja` } })}
+              onRecargar={() => void refetch()}
+            />
+          </div>
+        )}
       </div>
+
+      {reactivado && !d.fechaBaja && (
+        <p className="alert alert--success" role="status">Departamento reactivado: vuelve a estar publicado.</p>
+      )}
+      {d.fechaBaja && (
+        <ReactivarDepartamento id={d.id} version={d.version} fechaBaja={d.fechaBaja}
+          onReactivado={() => setReactivado(true)} onRecargar={() => void refetch()} />
+      )}
 
       <div className="detail__layout">
         <Galeria imagenes={d.imagenes} titulo={d.titulo} />
@@ -92,10 +108,12 @@ export function DepartamentoDetallePage() {
         </section>
       )}
 
-      <section aria-labelledby="consulta-titulo">
-        <h2 id="consulta-titulo">Hacer una consulta</h2>
-        <ConsultaForm departamentoId={d.id} disponible={d.estado !== 'VENDIDO'} />
-      </section>
+      {!d.fechaBaja && (
+        <section aria-labelledby="consulta-titulo">
+          <h2 id="consulta-titulo">Hacer una consulta</h2>
+          <ConsultaForm departamentoId={d.id} disponible={d.estado !== 'VENDIDO'} />
+        </section>
+      )}
 
       <p className="muted detail__meta">
         Publicado el {formatDateTime(d.createdAt)} · Actualizado el {formatDateTime(d.updatedAt)} ·{' '}

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Lebane API",
-    "description": "Recorrido completo de la API de Lebane: listado, alta, detalle, edición con concurrencia optimista, fotos, consultas, reglas de negocio, baja lógica, autocompletado y errores. Cada request tiene tests; correr la colección entera en orden (Run collection o Newman). Ver docs/postman/README.md.",
+    "description": "Recorrido completo de la API de Lebane: listado, alta, detalle, edición con concurrencia optimista, fotos, consultas, reglas de negocio, baja lógica y reactivación, autocompletado y errores. Cada request tiene tests; correr la colección entera en orden (Run collection o Newman). Ver docs/postman/README.md.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -51,6 +51,10 @@
     },
     {
       "key": "unidadBaja",
+      "value": ""
+    },
+    {
+      "key": "ocupanteId",
       "value": ""
     }
   ],
@@ -1492,8 +1496,8 @@
       ]
     },
     {
-      "name": "9. Baja lógica",
-      "description": "El departamento deja de existir para la API pero se conserva con sus fotos y consultas; su dirección queda libre. Usa un departamento propio, creado al principio de la carpeta.",
+      "name": "9. Baja lógica y reactivación",
+      "description": "Un departamento dado de baja sale del listado y no admite cambios, pero se conserva con sus fotos y consultas y se puede reactivar. Usa departamentos propios, creados en la carpeta.",
       "item": [
         {
           "name": "Crear departamento para dar de baja",
@@ -1626,7 +1630,7 @@
           ]
         },
         {
-          "name": "Error: el detalle ya no existe",
+          "name": "El detalle se lee con su fecha de baja",
           "request": {
             "method": "GET",
             "header": [],
@@ -1649,12 +1653,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 404', () => pm.response.to.have.status(404));",
-                  "pm.test('error NOT_FOUND con el esquema ApiError', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body.error).to.eql('NOT_FOUND');",
-                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
-                  "});"
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('bajaEtag', pm.response.headers.get('ETag'));",
+                  "pm.test('fechaBaja informada', () => pm.expect(pm.response.json().fechaBaja).to.be.a('string'));"
                 ]
               }
             }
@@ -1684,10 +1685,60 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 404', () => pm.response.to.have.status(404));",
-                  "pm.test('error NOT_FOUND con el esquema ApiError', () => {",
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error DEPARTAMENTO_DADO_DE_BAJA con el esquema ApiError', () => {",
                   "    const body = pm.response.json();",
-                  "    pm.expect(body.error).to.eql('NOT_FOUND');",
+                  "    pm.expect(body.error).to.eql('DEPARTAMENTO_DADO_DE_BAJA');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: consulta a un dado de baja",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/consultas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{bajaId}}",
+                "consultas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email\": \"postman.baja@example.com\",\n  \"telefono\": \"+54 11 5555-0101\",\n  \"mensaje\": \"¿Se puede visitar el sábado por la mañana?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error DEPARTAMENTO_DADO_DE_BAJA con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('DEPARTAMENTO_DADO_DE_BAJA');",
                   "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
                   "});"
                 ]
@@ -1732,6 +1783,51 @@
           ]
         },
         {
+          "name": "Aparece con el filtro de dados de baja",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?q=PostmanBaja{{marcaBaja}}&dadosDeBaja=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "PostmanBaja{{marcaBaja}}"
+                },
+                {
+                  "key": "dadosDeBaja",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('es el dado de baja', () => {",
+                  "    const content = pm.response.json().content;",
+                  "    pm.expect(content).to.have.lengthOf(1);",
+                  "    pm.expect(content[0].id).to.eql(Number(pm.collectionVariables.get('bajaId')));",
+                  "    pm.expect(content[0].fechaBaja).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "La dirección queda libre para otro aviso",
           "request": {
             "method": "POST",
@@ -1768,7 +1864,227 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 201', () => pm.response.to.have.status(201));"
+                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('ocupanteId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: reactivar con la dirección ocupada",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{bajaId}}",
+                "reactivacion"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error AVISO_DUPLICADO con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('AVISO_DUPLICADO');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dar de baja el que ocupa la dirección",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{ocupanteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{ocupanteId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: reactivar con un ETag desactualizado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "\"999\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{bajaId}}",
+                "reactivacion"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 412', () => pm.response.to.have.status(412));",
+                  "pm.test('error PRECONDITION_FAILED con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('PRECONDITION_FAILED');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reactivar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{bajaEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{bajaId}}",
+                "reactivacion"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('vuelve a estar publicado, con nueva versión', () => {",
+                  "    pm.expect(pm.response.json().fechaBaja).to.eql(null);",
+                  "    pm.expect(pm.response.headers.get('ETag')).to.not.eql(pm.collectionVariables.get('bajaEtag'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: reactivar uno publicado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{bajaId}}",
+                "reactivacion"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error DEPARTAMENTO_NO_DADO_DE_BAJA con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('DEPARTAMENTO_NO_DADO_DE_BAJA');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Vuelve a aparecer en el listado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?q=PostmanBaja{{marcaBaja}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "PostmanBaja{{marcaBaja}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('un resultado', () => pm.expect(pm.response.json().page.totalElements).to.eql(1));"
                 ]
               }
             }

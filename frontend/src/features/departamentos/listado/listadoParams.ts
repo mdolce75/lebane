@@ -20,6 +20,8 @@ export type ListadoParams = {
   precioMax?: number;
   ambientesMin?: number;
   conImagenes?: boolean;
+  /** true: solo los dados de baja (para reactivarlos). Sin el parámetro, solo los publicados. */
+  dadosDeBaja?: true;
   page: number;
   size: number;
   sort: string;
@@ -50,6 +52,7 @@ const urlSchema = z.object({
   precioMax: optionalAmount,
   ambientesMin: optionalNumber(1),
   conImagenes: z.enum(['true', 'false']).transform((v) => v === 'true').optional().catch(undefined),
+  dadosDeBaja: z.literal('true').transform(() => true as const).optional().catch(undefined),
   page: z.coerce.number().int().min(0).catch(0),
   size: z.coerce
     .number()
@@ -92,6 +95,7 @@ export function toSearchParams(params: Partial<ListadoParams>): URLSearchParams 
   set('precioMax', params.precioMax);
   set('ambientesMin', params.ambientesMin);
   set('conImagenes', params.conImagenes);
+  set('dadosDeBaja', params.dadosDeBaja);
   if (params.page) set('page', params.page);
   if (params.size && params.size !== DEFAULT_SIZE) set('size', params.size);
   if (params.sort && params.sort !== DEFAULT_SORT) set('sort', params.sort);
@@ -106,6 +110,6 @@ export function maxPage(size: number): number {
 export function hasActiveFilters(params: ListadoParams): boolean {
   return Boolean(
     params.q || params.ciudad || params.estado.length || params.moneda || params.ambientesMin ||
-      params.conImagenes !== undefined,
+      params.conImagenes !== undefined || params.dadosDeBaja,
   );
 }

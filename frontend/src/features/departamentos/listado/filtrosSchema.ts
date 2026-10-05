@@ -25,6 +25,7 @@ export const filtrosSchema = z
     precioMax: numeroOpcional,
     ambientesMin: z.union([z.literal(''), z.string().regex(/^([1-9]|1\d|20)$/, 'Entre 1 y 20')]),
     conImagenes: z.enum(['', 'true', 'false']),
+    dadosDeBaja: z.boolean(),
   })
   .superRefine((value, ctx) => {
     if ((value.precioMin || value.precioMax) && !value.moneda) {
@@ -53,6 +54,7 @@ export function filtrosFromParams(params: ListadoParams): FiltrosForm {
     precioMax: params.precioMax?.toString() ?? '',
     ambientesMin: params.ambientesMin?.toString() ?? '',
     conImagenes: params.conImagenes === undefined ? '' : String(params.conImagenes) as 'true' | 'false',
+    dadosDeBaja: params.dadosDeBaja === true,
   };
 }
 
@@ -66,5 +68,6 @@ export function paramsFromFiltros(form: FiltrosForm): Partial<ListadoParams> {
     precioMax: toNumber(form.precioMax),
     ambientesMin: form.ambientesMin ? Number(form.ambientesMin) : undefined,
     conImagenes: form.conImagenes === '' ? undefined : form.conImagenes === 'true',
+    dadosDeBaja: form.dadosDeBaja ? true : undefined,
   };
 }

@@ -55,6 +55,8 @@ export const departamentoDetalleSchema = z.object({
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Baja lógica: fecha de baja, o null si está publicado. */
+  fechaBaja: z.string().nullable(),
 });
 
 export const departamentoItemSchema = z.object({
@@ -74,6 +76,7 @@ export const departamentoItemSchema = z.object({
   cantidadImagenes: z.number(),
   cantidadConsultas: z.number(),
   createdAt: z.string(),
+  fechaBaja: z.string().nullable(),
 });
 
 export const paginaSchema = z.object({

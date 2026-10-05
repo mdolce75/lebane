@@ -13,6 +13,7 @@ export function DepartamentoCard({ departamento: d }: { departamento: Departamen
       <div className="card__body">
         <div className="card__top">
           <EstadoBadge estado={d.estado} />
+          {d.fechaBaja && <span className="badge badge--baja">Dado de baja</span>}
           <span className="muted card__codigo">{d.codigo}</span>
         </div>
         <h2 id={`dep-${d.id}`} className="card__title">

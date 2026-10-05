@@ -72,15 +72,15 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/R
 | `ActuatorEndpointsIT` | con PostgreSQL real (Testcontainers): health/liveness/readiness 200 `{"status":"UP"}`, métricas Hikari/HTTP |
 | `RequestValidationTest` | reglas de cada campo, `dormitorios < ambientes`, coordenadas completas, consultas, `toString` sin datos personales |
 | `DepartamentoMapperTest` | normalización de textos, estado por defecto, edición sin estado, URLs de imágenes |
-| `DepartamentoServiceTest`, `ConsultaServiceTest` | alta, detalle con consultas dedicadas, `If-Match`, 404, reglas del ciclo de vida (no publicar como vendido, vendido no editable, transiciones, 412 antes que 409), avisos y consultas duplicados (con el lock antes del control), baja lógica (fecha, 412, vendido, 404 en todas las operaciones) |
-| `DepartamentoBajaTest` | la baja guarda la fecha, no cambia el estado y es definitiva |
+| `DepartamentoServiceTest`, `ConsultaServiceTest` | alta, detalle con consultas dedicadas, `If-Match`, 404, reglas del ciclo de vida (no publicar como vendido, vendido no editable, transiciones, 412 antes que 409), avisos y consultas duplicados (con el lock antes del control), baja lógica y reactivación (fecha, 412 antes que 409, vendido, 409 al modificar un dado de baja, dirección ocupada al reactivar) |
+| `DepartamentoBajaTest` | la baja guarda la fecha y no cambia el estado; no se repite; la reactivación la revierte |
 | `DireccionTest` | criterio de "misma dirección": sin mayúsculas, sin código postal ni coordenadas, piso y unidad cuentan |
 | `EstadoDepartamentoTest`, frontend `estadoReglas.test.ts` | matriz de transiciones de estado, vendido como registro cerrado (mismas reglas en backend y frontend) |
 | `DepartamentoControllerTest` | contrato HTTP (201 + `Location` relativo + `ETag`, 412, 409, 404, 405, 415, 503, 500) y esquema `ApiError` sin detalles internos |
 | `EntityMappingRulesTest` | ninguna relación EAGER ni colección mapeada |
 | `EntityTagsTest`, `CodigoDepartamentoGeneratorTest`, `SeedDataTest` | ETags, formato de códigos, seed válido |
 | `PersistenceIT` | Flyway + validación de esquema, auditoría, versión, `CHECK`/`UNIQUE` en la base (máx. 5 fotos, dormitorios, código), orden de imágenes, relaciones LAZY |
-| `DepartamentoApiIT` | ciclo HTTP completo contra PostgreSQL, `If-Match`, consultas, reglas de estado y de duplicados, baja lógica (412, 404 en todas las operaciones, fuera del listado, datos conservados, dirección libre), errores y **3 sentencias SQL fijas en el detalle** (sin N+1) |
+| `DepartamentoApiIT` | ciclo HTTP completo contra PostgreSQL, `If-Match`, consultas, reglas de estado y de duplicados, baja y reactivación (412, 409 al modificar, detalle con `fechaBaja`, filtro `dadosDeBaja`, datos conservados, dirección libre y ocupada), errores y **3 sentencias SQL fijas en el detalle** (sin N+1) |
 | `DevDataSeederIT` | seed al arrancar, idempotente, sin pisar ediciones ni recrear avisos dados de baja |
 | `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, moneda obligatoria para precio, ventana máxima |
 | `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |
@@ -101,7 +101,7 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/R
 | Frontend `components.test.tsx` | placeholder e imagen rota, paginación con ventana máxima |
 | Frontend `DepartamentosListPage.test.tsx` | paginación y filtros enviados al servidor, validación de filtros, vacío vs sin resultados, error con requestId y reintento |
 | Frontend `DepartamentoNuevoPage.test.tsx` | validación, subida secuencial con vista previa, límite de 5, rechazo por contenido, quitar antes de enviar, errores parciales con reintento sin recrear, `fieldErrors` del servidor |
-| Frontend `DepartamentoDetallePage.test.tsx`, `DepartamentoEditarPage.test.tsx` | galería, 404, consulta, vendido, baja con confirmación (`If-Match`, cancelar, 412 con recarga); `If-Match`, conflicto 412 con recarga, gestión de fotos |
+| Frontend `DepartamentoDetallePage.test.tsx`, `DepartamentoEditarPage.test.tsx` | galería, 404, consulta, vendido, baja con confirmación (`If-Match`, cancelar, 412 con recarga), dado de baja (sin acciones, reactivar, dirección ocupada); `If-Match`, conflicto 412 con recarga, gestión de fotos |
 | Frontend `DireccionAutocomplete.test.tsx` | debounce, mínimo de caracteres, proveedor degradado |
 | `LogstashAppenderTest` | appender de producción contra un servidor TCP local: JSON con campos comunes, MDC y argumentos, sin propiedades internas, secretos enmascarados; con Logstash caído no bloquea (20.000 eventos) y el apagado no espera más de 5 s |
 | `TraceCorrelationTest` | con tracing activo: `requestId`, `traceId` y `spanId` en el access log, `traceparent` entrante continuado, `exception`/`errorCode`/`status` como campos, sin appender de Logstash cuando está deshabilitado |

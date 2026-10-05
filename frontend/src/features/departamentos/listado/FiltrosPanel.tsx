@@ -64,6 +64,13 @@ export function FiltrosPanel({ params, onApply, onClear }: Props) {
           </select>
         </FormField>
         <fieldset className="field">
+          <legend>Publicación</legend>
+          <label className="checkbox">
+            <input type="checkbox" {...register('dadosDeBaja')} />
+            Ver solo los dados de baja
+          </label>
+        </fieldset>
+        <fieldset className="field">
           <legend>Estado</legend>
           <div className="checkbox-group">
             {estados.map((estado) => (

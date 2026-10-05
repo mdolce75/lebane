@@ -30,9 +30,10 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 |---|---|---|---|
 | `GET` | `/api/v1/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
 | `POST` | `/api/v1/departamentos` | Alta (no como `VENDIDO` ni en la dirección de otro publicado) | `201` + `Location` + `ETag` · `400` · `409` |
-| `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas) | `200` + `ETag` · `400` · `404` |
+| `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas, `fechaBaja`) | `200` + `ETag` · `400` · `404` |
 | `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional; un `VENDIDO` no se edita | `200` + `ETag` · `400` · `404` · `409` · `412` |
-| `DELETE` | `/api/v1/departamentos/{id}` | Baja lógica (ver abajo); `If-Match` opcional | `204` · `400` · `404` · `412` |
+| `DELETE` | `/api/v1/departamentos/{id}` | Baja lógica (ver abajo); `If-Match` opcional | `204` · `400` · `404` · `409` · `412` |
+| `POST` | `/api/v1/departamentos/{id}/reactivacion` | Reactivar un dado de baja; `If-Match` opcional | `200` + `ETag` · `400` · `404` · `409` · `412` |
 | `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido o repetida) |
 | `POST` | `/api/v1/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](arquitectura.md#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
 | `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` · `409` (vendido) |
@@ -102,18 +103,25 @@ DISPONIBLE ⇄ RESERVADO
 - Las reglas viven en el enum (`transicionesPermitidas`, `esModificable`, `admiteAlta`) y se aplican en los servicios;
   el frontend las replica para no ofrecer opciones que el backend va a rechazar.
 
-**Baja lógica**:
+**Baja lógica y reactivación**:
 
 - `DELETE /api/v1/departamentos/{id}` no borra el registro: guarda la fecha en `fecha_baja`. Desde ese momento el
-  departamento no aparece en el listado ni cuenta en el total, y el detalle, la edición, las fotos, las consultas y
-  una segunda baja responden `404`, igual que si no existiera.
+  departamento no aparece en el listado ni cuenta en el total, y no admite cambios: la edición, las fotos, las
+  consultas y una segunda baja responden `409 DEPARTAMENTO_DADO_DE_BAJA`. El detalle se sigue leyendo, con
+  `fechaBaja`, y el listado lo muestra con `dadosDeBaja=true`.
 - Se conservan el departamento, sus fotos (también en MinIO) y sus consultas, como historial. La dirección queda libre
   para otro aviso.
-- Se puede dar de baja en cualquier estado, también vendido, para sacarlo del listado. Es definitiva.
-- Con `If-Match` desactualizado responde `412` sin darlo de baja, igual que la edición.
+- Se puede dar de baja en cualquier estado, también vendido, para sacarlo del listado.
+- `POST /api/v1/departamentos/{id}/reactivacion` lo vuelve a publicar tal como estaba: mismo estado, datos, fotos y
+  consultas. Si está disponible o reservado y mientras tanto se publicó otro aviso en su dirección, responde
+  `409 AVISO_DUPLICADO`. Si no estaba dado de baja, `409 DEPARTAMENTO_NO_DADO_DE_BAJA`.
+- Baja y reactivación usan `If-Match` como la edición: con una versión desactualizada responden `412` sin cambiar nada,
+  antes que cualquier `409`.
 - Una operación en curso sobre el mismo departamento no le agrega datos después de la baja: subir una foto y enviar
   una consulta bloquean la fila (`SELECT … FOR UPDATE`) solo si sigue vigente, y la baja también toma ese lock.
-- Todas las consultas filtran `fecha_baja IS NULL` con la Criteria API (`DepartamentoSpecifications.noDadoDeBaja`).
+- El listado filtra `fecha_baja IS NULL` (o `IS NOT NULL` con `dadosDeBaja=true`) con la Criteria API
+  (`DepartamentoSpecifications.noDadoDeBaja` / `dadoDeBaja`); los dados de baja tienen su propio índice parcial
+  (`V5__indice_dados_de_baja.sql`).
   No se usa `@SQLRestriction` ni `@SoftDelete` de Hibernate: el filtro queda explícito y el seed puede ver los dados
   de baja para no volver a crearlos.
 
@@ -181,6 +189,8 @@ Todas las respuestas de error (validación, dominio, Spring MVC, Spring Security
 | `CONCURRENT_MODIFICATION` | 409 | Conflicto de concurrencia optimista |
 | `DEPARTAMENTO_NO_DISPONIBLE` | 409 | Regla de negocio: un departamento vendido no se edita, no cambia sus fotos ni recibe consultas |
 | `TRANSICION_DE_ESTADO_INVALIDA` | 409 | Regla de negocio: cambio de estado no permitido (p. ej. publicar directamente como vendido) |
+| `DEPARTAMENTO_DADO_DE_BAJA` | 409 | Regla de negocio: está dado de baja; para modificarlo hay que reactivarlo |
+| `DEPARTAMENTO_NO_DADO_DE_BAJA` | 409 | Regla de negocio: se pidió reactivar uno que está publicado |
 | `AVISO_DUPLICADO` | 409 | Regla de negocio: ya hay un departamento publicado en la misma dirección |
 | `CONSULTA_DUPLICADA` | 409 | Regla de negocio: el mismo email ya consultó por el departamento en las últimas 24 horas |
 | `LIMITE_IMAGENES_ALCANZADO` | 409 | El departamento ya tiene 5 fotos |
@@ -211,6 +221,7 @@ agregados); el cliente nunca recibe más que una página.
 | `superficieMin` / `superficieMax` | `superficieMin=40` | m², ≥ 0, mínimo ≤ máximo |
 | `ambientesMin` / `dormitoriosMin` / `banosMin` | `ambientesMin=3` | Mínimos |
 | `conImagenes` | `conImagenes=true` | `true`: solo con fotos; `false`: solo sin fotos |
+| `dadosDeBaja` | `dadosDeBaja=true` | `true`: solo los dados de baja (para reactivarlos). Sin el parámetro, solo los publicados |
 | `page` | `page=0` | Desde 0. Default 0 |
 | `size` | `size=20` | 1..100. Default 20 |
 | `sort` | `sort=precio,asc` | `createdAt` (default, `desc`), `precio` (dentro de cada moneda), `superficieM2`; con `,asc` o `,desc` |

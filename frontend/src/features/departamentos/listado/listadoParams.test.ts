@@ -4,6 +4,8 @@ import { DEFAULT_SIZE, DEFAULT_SORT, maxPage, parseListadoParams, toSearchParams
 
 const parse = (query: string) => parseListadoParams(new URLSearchParams(query));
 
+const vacioForm = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', ambientesMin: '', conImagenes: '', dadosDeBaja: false } as const;
+
 describe('parseListadoParams', () => {
   it('usa defaults sin parámetros', () => {
     expect(parse('')).toEqual({ estado: [], page: 0, size: DEFAULT_SIZE, sort: DEFAULT_SORT });
@@ -34,6 +36,13 @@ describe('parseListadoParams', () => {
     expect(parse('page=5000&size=12').page).toBe(832);
   });
 
+  it('el filtro de dados de baja solo existe activado', () => {
+    expect(parse('dadosDeBaja=true').dadosDeBaja).toBe(true);
+    expect(parse('dadosDeBaja=false').dadosDeBaja).toBeUndefined();
+    expect(toSearchParams({ dadosDeBaja: true }).toString()).toBe('dadosDeBaja=true');
+    expect(paramsFromFiltros(filtrosSchema.parse({ ...vacioForm, dadosDeBaja: true })).dadosDeBaja).toBe(true);
+  });
+
   it('serializa a la URL omitiendo defaults', () => {
     const search = toSearchParams({ q: 'balcón', estado: ['VENDIDO'], page: 0, size: DEFAULT_SIZE, sort: DEFAULT_SORT });
     expect(search.toString()).toBe('q=balc%C3%B3n&estado=VENDIDO');
@@ -42,7 +51,7 @@ describe('parseListadoParams', () => {
 });
 
 describe('filtrosSchema', () => {
-  const vacio = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', ambientesMin: '', conImagenes: '' } as const;
+  const vacio = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', ambientesMin: '', conImagenes: '', dadosDeBaja: false } as const;
 
   it('acepta el formulario vacío y lo convierte en "sin filtros"', () => {
     const form = filtrosSchema.parse(vacio);

@@ -180,9 +180,10 @@ test.describe('Edición', () => {
   });
 });
 
-test.describe('Baja', () => {
-  test('da de baja con confirmación: sale del listado y la API responde 404', async ({ page, request }) => {
+test.describe('Baja y reactivación', () => {
+  test('da de baja con confirmación, se encuentra con su filtro y se reactiva', async ({ page, request }) => {
     const { id, titulo } = await crearDepartamento(request);
+    const marcaTitulo = encodeURIComponent(titulo.split(' ')[0]!);
     await page.goto(`/departamentos/${id}`);
     await expect(page.getByRole('heading', { level: 1, name: titulo })).toBeVisible();
 
@@ -191,9 +192,24 @@ test.describe('Baja', () => {
 
     await expect(page).toHaveURL(/\/departamentos$/);
     await expect(page.getByText(/dado de baja\./)).toBeVisible();
-    expect((await request.get(`/api/v1/departamentos/${id}`)).status()).toBe(404);
+    const baja = await request.get(`/api/v1/departamentos/${id}`);
+    expect(baja.status()).toBe(200);
+    expect((await baja.json()).fechaBaja).not.toBeNull();
 
-    await page.goto(`/departamentos?q=${encodeURIComponent(titulo.split(' ')[0]!)}`);
+    // Sale del listado y aparece con el filtro de dados de baja.
+    await page.goto(`/departamentos?q=${marcaTitulo}`);
     await expect(page.getByText('0 departamentos')).toBeVisible();
+    await page.getByLabel('Ver solo los dados de baja').check();
+    await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+    const tarjeta = page.getByRole('article', { name: titulo });
+    await expect(tarjeta).toContainText('Dado de baja');
+
+    await tarjeta.getByRole('link', { name: titulo }).click();
+    await page.getByRole('button', { name: 'Reactivar' }).click();
+    await expect(page.getByText(/Departamento reactivado/)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Editar' })).toBeVisible();
+
+    await page.goto(`/departamentos?q=${marcaTitulo}`);
+    await expect(page.getByRole('article', { name: titulo })).toBeVisible();
   });
 });

@@ -121,4 +121,42 @@ describe('Detalle de departamento', () => {
     expect(screen.queryByText('Otro usuario modificó este departamento.')).not.toBeInTheDocument();
     expect(api.requests('GET', DETALLE).length).toBeGreaterThan(1);
   });
+
+  it('un dado de baja se ve con su aviso, sin acciones ni consultas, y se reactiva con la versión leída', async () => {
+    // Backend simulado con estado: después de reactivar, el detalle ya no tiene fecha de baja.
+    let fechaBaja: string | null = '2026-10-05T12:00:00Z';
+    const api = mockApi()
+      .on('GET', DETALLE, () => jsonResponse(detalle({ fechaBaja })))
+      .on('POST', `${DETALLE}/reactivacion`, () => {
+        fechaBaja = null;
+        return jsonResponse(detalle({ version: 4 }));
+      });
+    renderRoute('/departamentos/1');
+
+    const aviso = await screen.findByRole('alert');
+    expect(aviso).toHaveTextContent(/Dado de baja el/);
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dar de baja' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Consulta' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(aviso).getByRole('button', { name: 'Reactivar' }));
+
+    expect(await screen.findByText(/Departamento reactivado/)).toBeInTheDocument();
+    expect(api.requests('POST', `${DETALLE}/reactivacion`)[0]?.headers.get('If-Match')).toBe('"3"');
+    expect(screen.getByRole('link', { name: 'Editar' })).toBeInTheDocument();
+    expect(screen.getByRole('form', { name: 'Consulta' })).toBeInTheDocument();
+  });
+
+  it('si la dirección la ocupa otro aviso, explica por qué no se reactiva', async () => {
+    mockApi()
+      .on('GET', DETALLE, detalle({ fechaBaja: '2026-10-05T12:00:00Z' }))
+      .on('POST', `${DETALLE}/reactivacion`, () => apiError(409, 'AVISO_DUPLICADO',
+        { message: 'Ya hay un departamento publicado en la misma dirección (calle, número, piso y unidad)' }));
+    renderRoute('/departamentos/1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Reactivar' }));
+
+    expect(await screen.findByText(/Ya hay un departamento publicado en la misma dirección/)).toBeInTheDocument();
+    expect(screen.getByText(/Dado de baja el/)).toBeInTheDocument();
+  });
 });

@@ -8,6 +8,7 @@ import {
   eliminarImagen,
   listarDepartamentos,
   obtenerDepartamento,
+  reactivarDepartamento,
   subirImagen,
 } from './departamentosApi';
 import type { ConsultaPayload, DepartamentoPayload } from './schemas';
@@ -72,13 +73,21 @@ export function useActualizarDepartamento(id: number) {
   });
 }
 
-/** Tras la baja, el detalle deja de existir: se descarta del cache y los listados se recargan. */
+/** Tras la baja, el detalle (ahora con `fechaBaja`) y los listados se recargan. */
 export function useDarDeBajaDepartamento(id: number) {
-  const queryClient = useQueryClient();
+  const invalidar = useInvalidarDepartamento();
   return useMutation({
     mutationFn: (version: number) => darDeBajaDepartamento(id, version),
-    onSuccess: () => {
-      queryClient.removeQueries({ queryKey: departamentosKeys.detalle(id) });
+    onSuccess: () => invalidar(id),
+  });
+}
+
+export function useReactivarDepartamento(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (version: number) => reactivarDepartamento(id, version),
+    onSuccess: (reactivado) => {
+      queryClient.setQueryData(departamentosKeys.detalle(id), reactivado);
       return queryClient.invalidateQueries({ queryKey: departamentosKeys.listas() });
     },
   });
