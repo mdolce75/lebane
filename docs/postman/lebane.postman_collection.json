@@ -1,0 +1,1479 @@
+{
+  "info": {
+    "name": "Lebane API",
+    "description": "Recorrido completo de la API de Lebane: listado, alta, detalle, edición con concurrencia optimista, fotos, consultas, reglas de negocio, autocompletado y errores. Cada request tiene tests; correr la colección entera en orden (Run collection o Newman). Ver docs/postman/README.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "departamentoId",
+      "value": ""
+    },
+    {
+      "key": "etag",
+      "value": ""
+    },
+    {
+      "key": "etagAnterior",
+      "value": ""
+    },
+    {
+      "key": "imagenId",
+      "value": ""
+    },
+    {
+      "key": "unidad",
+      "value": ""
+    },
+    {
+      "key": "emailConsulta",
+      "value": ""
+    },
+    {
+      "key": "emailConsultaMayusculas",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Salud",
+      "description": "Probes de Actuator: liveness sin dependencias, readiness solo con PostgreSQL.",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health/liveness",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "liveness"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health/readiness",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "readiness"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Listado",
+      "description": "Paginado, filtros y orden. Todos los parámetros son opcionales.",
+      "item": [
+        {
+          "name": "Listado por defecto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('formato PagedModel', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.keys('content', 'page');",
+                  "    pm.expect(body.page).to.include.keys('size', 'number', 'totalElements', 'totalPages');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtros combinados y orden por precio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?ciudad=Ciudad Autónoma de Buenos Aires&estado=DISPONIBLE&moneda=USD&precioMin=50000&precioMax=500000&ambientesMin=2&sort=precio,asc&size=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "ciudad",
+                  "value": "Ciudad Autónoma de Buenos Aires"
+                },
+                {
+                  "key": "estado",
+                  "value": "DISPONIBLE"
+                },
+                {
+                  "key": "moneda",
+                  "value": "USD"
+                },
+                {
+                  "key": "precioMin",
+                  "value": "50000"
+                },
+                {
+                  "key": "precioMax",
+                  "value": "500000"
+                },
+                {
+                  "key": "ambientesMin",
+                  "value": "2"
+                },
+                {
+                  "key": "sort",
+                  "value": "precio,asc"
+                },
+                {
+                  "key": "size",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('respeta filtros y orden', () => {",
+                  "    const precios = pm.response.json().content.map(d => {",
+                  "        pm.expect(d.estado).to.eql('DISPONIBLE');",
+                  "        pm.expect(d.moneda).to.eql('USD');",
+                  "        return Number(d.precio);",
+                  "    });",
+                  "    pm.expect(precios).to.eql([...precios].sort((a, b) => a - b));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Búsqueda de texto en el título",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?q=ambientes&conImagenes=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "ambientes"
+                },
+                {
+                  "key": "conImagenes",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: rango de precio sin moneda",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?precioMin=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "precioMin",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error VALIDATION_ERROR con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});",
+                  "pm.test('indica el campo', () => pm.expect(pm.response.json().fieldErrors).to.have.property('moneda'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: orden no admitido",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?sort=foo,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "foo,asc"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error VALIDATION_ERROR con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Alta y detalle",
+      "description": "Crea el departamento que usan las carpetas siguientes (guarda `departamentoId` y `etag`).",
+      "item": [
+        {
+          "name": "Crear departamento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Unidad propia por ejecución: la API rechaza dos avisos publicados en la misma dirección.",
+                  "pm.collectionVariables.set('unidad', 'P' + Date.now().toString(36).slice(-8));",
+                  "pm.collectionVariables.set('emailConsulta', `postman.${Date.now()}@example.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('departamentoId', body.id);",
+                  "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "pm.test('Location y ETag', () => {",
+                  "    pm.expect(pm.response.headers.get('Location')).to.match(new RegExp(`/api/v1/departamentos/${body.id}$`));",
+                  "    pm.expect(pm.response.headers.get('ETag')).to.match(/^\"\\d+\"$/);",
+                  "});",
+                  "pm.test('código generado y estado por defecto', () => {",
+                  "    pm.expect(body.codigo).to.match(/^DEP-/);",
+                  "    pm.expect(body.estado).to.eql('DISPONIBLE');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obtener detalle",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "pm.test('detalle completo', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.id).to.eql(Number(pm.collectionVariables.get('departamentoId')));",
+                  "    pm.expect(body).to.include.keys('direccion', 'imagenes', 'cantidadConsultas');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: datos inválidos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": -1,\n  \"moneda\": \"USD\",\n  \"ambientes\": 2,\n  \"dormitorios\": 3,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error VALIDATION_ERROR con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});",
+                  "pm.test('un error por campo', () => pm.expect(pm.response.json().fieldErrors).to.include.keys('precio', 'titulo'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: publicar directamente como vendido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}V\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  },\n  \"estado\": \"VENDIDO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error TRANSICION_DE_ESTADO_INVALIDA con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('TRANSICION_DE_ESTADO_INVALIDA');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: misma dirección que otro publicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Misma calle, número, piso, unidad, ciudad y provincia que el departamento recién creado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error AVISO_DUPLICADO con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('AVISO_DUPLICADO');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: departamento inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "999999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error NOT_FOUND con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('NOT_FOUND');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Edición con concurrencia optimista",
+      "description": "PUT con `If-Match`: si otro lo modificó desde la lectura, 412.",
+      "item": [
+        {
+          "name": "Editar con If-Match vigente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{etag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  },\n  \"estado\": \"RESERVADO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('etagAnterior', pm.collectionVariables.get('etag'));",
+                  "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "pm.test('nueva versión y estado', () => {",
+                  "    pm.expect(pm.response.json().estado).to.eql('RESERVADO');",
+                  "    pm.expect(pm.response.headers.get('ETag')).to.not.eql(pm.collectionVariables.get('etagAnterior'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: editar con un ETag desactualizado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{etagAnterior}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  },\n  \"estado\": \"DISPONIBLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 412', () => pm.response.to.have.status(412));",
+                  "pm.test('error PRECONDITION_FAILED con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('PRECONDITION_FAILED');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Fotos",
+      "description": "Requiere `foto-ejemplo.png` en el directorio de trabajo (ver README de esta carpeta).",
+      "item": [
+        {
+          "name": "Subir foto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "imagenes"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "archivo",
+                  "type": "file",
+                  "src": "foto-ejemplo.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('imagenId', body.id);",
+                  "pm.test('URL pública y posición', () => {",
+                  "    pm.expect(body.url).to.be.a('string');",
+                  "    pm.expect(body.posicion).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: archivo que no es una imagen",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "imagenes"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "archivo",
+                  "type": "file",
+                  "src": "no-es-imagen.png"
+                }
+              ]
+            },
+            "description": "Extensión .png pero contenido de texto: el backend valida la firma del archivo, no el nombre."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error VALIDATION_ERROR con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar foto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes/{{imagenId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "imagenes",
+                "{{imagenId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: eliminar una foto inexistente",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes/{{imagenId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "imagenes",
+                "{{imagenId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error NOT_FOUND con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('NOT_FOUND');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Consultas",
+      "description": "Consultas de interesados. El mismo email no consulta dos veces por el mismo departamento en 24 h.",
+      "item": [
+        {
+          "name": "Enviar consulta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/consultas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "consultas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email\": \"{{emailConsulta}}\",\n  \"telefono\": \"+54 11 5555-0101\",\n  \"mensaje\": \"¿Se puede visitar el sábado por la mañana?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('no devuelve datos personales', () => {",
+                  "    pm.expect(pm.response.text()).to.not.include(pm.collectionVariables.get('emailConsulta'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: misma consulta repetida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/consultas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "consultas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email\": \"{{emailConsultaMayusculas}}\",\n  \"telefono\": \"+54 11 5555-0101\",\n  \"mensaje\": \"¿Se puede visitar el sábado por la mañana?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Mismo email con otras mayúsculas: también cuenta como repetida.",
+                  "pm.collectionVariables.set('emailConsultaMayusculas', pm.collectionVariables.get('emailConsulta').toUpperCase());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error CONSULTA_DUPLICADA con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('CONSULTA_DUPLICADA');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle refleja la consulta",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "pm.test('cantidadConsultas = 1', () => pm.expect(pm.response.json().cantidadConsultas).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Venta: registro cerrado",
+      "description": "Un departamento vendido no se edita, no cambia sus fotos ni recibe consultas.",
+      "item": [
+        {
+          "name": "Vender",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{etag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  },\n  \"estado\": \"VENDIDO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "pm.test('VENDIDO', () => pm.expect(pm.response.json().estado).to.eql('VENDIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: editar un vendido",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{etag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Postman: 3 ambientes con balcón\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidad}}\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  },\n  \"estado\": \"DISPONIBLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error DEPARTAMENTO_NO_DISPONIBLE con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('DEPARTAMENTO_NO_DISPONIBLE');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: consulta a un vendido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/consultas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "consultas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email\": \"otra.persona@example.com\",\n  \"telefono\": \"+54 11 5555-0101\",\n  \"mensaje\": \"¿Se puede visitar el sábado por la mañana?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error DEPARTAMENTO_NO_DISPONIBLE con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('DEPARTAMENTO_NO_DISPONIBLE');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: foto a un vendido",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos",
+                "{{departamentoId}}",
+                "imagenes"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "archivo",
+                  "type": "file",
+                  "src": "foto-ejemplo.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error DEPARTAMENTO_NO_DISPONIBLE con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('DEPARTAMENTO_NO_DISPONIBLE');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Direcciones",
+      "description": "Autocompletado. Con `ADDRESS_PROVIDER=stub` sugiere un catálogo de ejemplo; con `external`, Georef.",
+      "item": [
+        {
+          "name": "Autocompletar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/direcciones/autocompletar?q=gorriti&limite=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "direcciones",
+                "autocompletar"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "gorriti"
+                },
+                {
+                  "key": "limite",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sugerencias del proveedor', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.include.keys('sugerencias', 'proveedor', 'degradado');",
+                  "    pm.expect(body.sugerencias.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: texto demasiado corto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/direcciones/autocompletar?q=go",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "direcciones",
+                "autocompletar"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "go"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error VALIDATION_ERROR con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Trazabilidad y errores",
+      "description": "X-Request-Id de punta a punta y errores con el mismo esquema.",
+      "item": [
+        {
+          "name": "X-Request-Id propagado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos?size=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('devuelve el mismo X-Request-Id', () => {",
+                  "    pm.expect(pm.response.headers.get('X-Request-Id')).to.eql(pm.request.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: ruta inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "no-existe"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error NOT_FOUND con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('NOT_FOUND');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: JSON mal formado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"titulo\": "
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error BAD_REQUEST con el esquema ApiError', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.eql('BAD_REQUEST');",
+                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
