@@ -47,6 +47,14 @@ export async function actualizarDepartamento(id: number, version: number, payloa
   return parseResponse(departamentoDetalleSchema, data);
 }
 
+/**
+ * Baja lógica con concurrencia optimista: `If-Match` con la versión leída (412 si otro usuario lo modificó).
+ * Desde ahí el departamento responde 404 en toda la API.
+ */
+export async function darDeBajaDepartamento(id: number, version: number) {
+  await http.delete<void>(`${BASE}/${id}`, { headers: { 'If-Match': `"${version}"` } });
+}
+
 /** Una foto por request (el backend valida tipo por contenido, tamaño y límite de 5). */
 export async function subirImagen(departamentoId: number, archivo: File) {
   const form = new FormData();

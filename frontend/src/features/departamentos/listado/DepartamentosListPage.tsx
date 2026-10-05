@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { Pagination } from '../../../shared/components/Pagination';
@@ -12,6 +12,7 @@ import { useListadoSearch } from './useListadoSearch';
 
 export function DepartamentosListPage() {
   const { params, update, clear } = useListadoSearch();
+  const aviso = (useLocation().state as { aviso?: string } | null)?.aviso;
   const { data, isPending, isError, error, isFetching, isPlaceholderData, refetch } = useDepartamentos(params);
 
   return (
@@ -24,6 +25,8 @@ export function DepartamentosListPage() {
         </div>
         <Link to="/departamentos/nuevo" className="button">Nuevo departamento</Link>
       </div>
+
+      {aviso && <p className="alert alert--success" role="status">{aviso}.</p>}
 
       <FiltrosPanel params={params} onApply={(filtros) => update(filtros)} onClear={clear} />
 

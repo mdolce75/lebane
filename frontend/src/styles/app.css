@@ -29,6 +29,12 @@ h2 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
   background: var(--color-surface); color: var(--color-primary); border-color: rgba(32, 101, 255, 0.15);
 }
 .button--ghost:hover:not(:disabled) { background: var(--color-primary-tint); border-color: rgba(32, 101, 255, 0.3); }
+.button--danger {
+  background: var(--color-surface); color: var(--color-danger); border-color: rgba(196, 40, 60, 0.3);
+}
+.button--danger:hover:not(:disabled) { background: var(--color-danger-bg); border-color: var(--color-danger); }
+.page-header__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.page-header__alert { flex-basis: 100%; }
 .button--small { padding: 8px 14px; font-size: 0.8rem; }
 .link-button {
   background: none; border: none; color: var(--color-primary); cursor: pointer; padding: 0;

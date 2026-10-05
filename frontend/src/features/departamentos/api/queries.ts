@@ -4,6 +4,7 @@ import {
   actualizarDepartamento,
   crearConsulta,
   crearDepartamento,
+  darDeBajaDepartamento,
   eliminarImagen,
   listarDepartamentos,
   obtenerDepartamento,
@@ -66,6 +67,18 @@ export function useActualizarDepartamento(id: number) {
       actualizarDepartamento(id, version, payload),
     onSuccess: (actualizado) => {
       queryClient.setQueryData(departamentosKeys.detalle(id), actualizado);
+      return queryClient.invalidateQueries({ queryKey: departamentosKeys.listas() });
+    },
+  });
+}
+
+/** Tras la baja, el detalle deja de existir: se descarta del cache y los listados se recargan. */
+export function useDarDeBajaDepartamento(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (version: number) => darDeBajaDepartamento(id, version),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: departamentosKeys.detalle(id) });
       return queryClient.invalidateQueries({ queryKey: departamentosKeys.listas() });
     },
   });

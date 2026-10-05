@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { detalle } from '../../../test/fixtures';
+import { detalle, item, pagina } from '../../../test/fixtures';
 import { apiError, mockApi } from '../../../test/mockApi';
 import { jsonResponse, renderRoute } from '../../../test/utils';
 
@@ -77,5 +77,48 @@ describe('Detalle de departamento', () => {
     expect(screen.queryByRole('form', { name: 'Consulta' })).not.toBeInTheDocument();
     // Registro cerrado: no se ofrece editarlo.
     expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+  });
+
+  it('da de baja con confirmación, con la versión leída, y vuelve al listado con un aviso', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const api = mockApi()
+      .on('GET', DETALLE, detalle({ estado: 'VENDIDO' }))
+      .on('DELETE', DETALLE, () => new Response(null, { status: 204 }))
+      .on('GET', '/api/v1/departamentos', pagina([item({ id: 2 })]));
+    renderRoute('/departamentos/1');
+
+    // También un vendido se puede dar de baja (para sacarlo del listado).
+    await userEvent.click(await screen.findByRole('button', { name: 'Dar de baja' }));
+
+    expect(await screen.findByText('Departamento SEED-0001 dado de baja.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Departamentos' })).toBeInTheDocument();
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('¿Dar de baja SEED-0001?'));
+    expect(api.requests('DELETE', DETALLE)[0]?.headers.get('If-Match')).toBe('"3"');
+  });
+
+  it('si no se confirma, no envía nada', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const api = mockApi().on('GET', DETALLE, detalle());
+    renderRoute('/departamentos/1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Dar de baja' }));
+
+    expect(api.requests('DELETE', DETALLE)).toHaveLength(0);
+    expect(screen.getByRole('heading', { level: 1, name: 'Luminoso 3 ambientes con balcón en Palermo' })).toBeInTheDocument();
+  });
+
+  it('ante un 412 avisa que otro usuario lo modificó y permite recargar', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const api = mockApi()
+      .on('GET', DETALLE, detalle())
+      .on('DELETE', DETALLE, () => apiError(412, 'PRECONDITION_FAILED'));
+    renderRoute('/departamentos/1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Dar de baja' }));
+
+    expect(await screen.findByText('Otro usuario modificó este departamento.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Recargar' }));
+    expect(screen.queryByText('Otro usuario modificó este departamento.')).not.toBeInTheDocument();
+    expect(api.requests('GET', DETALLE).length).toBeGreaterThan(1);
   });
 });

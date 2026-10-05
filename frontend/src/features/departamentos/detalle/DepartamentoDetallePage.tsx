@@ -1,9 +1,10 @@
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { isHttpError } from '../../../shared/api/errors';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { Spinner } from '../../../shared/components/Spinner';
 import { formatArea, formatDateTime, formatPrice, plural } from '../../../shared/format/format';
 import { useDepartamento } from '../api/queries';
+import { BajaDepartamento } from './BajaDepartamento';
 import { ConsultaForm } from '../consultas/ConsultaForm';
 import { EstadoBadge } from '../EstadoBadge';
 import { esModificable } from '../estadoReglas';
@@ -13,6 +14,7 @@ import { NoEncontrado } from './NoEncontrado';
 export function DepartamentoDetallePage() {
   const id = Number(useParams().id);
   const aviso = (useLocation().state as { aviso?: string } | null)?.aviso;
+  const navigate = useNavigate();
   const { data: d, isPending, isError, error, refetch } = useDepartamento(id);
 
   if (!Number.isInteger(id) || id <= 0) return <NoEncontrado />;
@@ -43,7 +45,15 @@ export function DepartamentoDetallePage() {
             {d.codigo} · <EstadoBadge estado={d.estado} />
           </p>
         </div>
-        {esModificable(d.estado) && <Link to={`/departamentos/${d.id}/editar`} className="button">Editar</Link>}
+        <div className="page-header__actions">
+          {esModificable(d.estado) && <Link to={`/departamentos/${d.id}/editar`} className="button">Editar</Link>}
+          <BajaDepartamento
+            id={d.id}
+            version={d.version}
+            codigo={d.codigo}
+            onBaja={() => navigate('/departamentos', { state: { aviso: `Departamento ${d.codigo} dado de baja` } })}
+          />
+        </div>
       </div>
 
       <div className="detail__layout">
