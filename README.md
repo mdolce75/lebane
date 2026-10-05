@@ -98,7 +98,8 @@ Sin Docker, con variables de entorno, perfil de observabilidad y todas las opcio
 3. **Romper una dependencia**: `docker compose stop minio`. Subir una foto responde 503 con un mensaje claro y,
    después de algunos intentos, el *circuit breaker* rechaza en milisegundos. El listado, el detalle y el
    readiness siguen funcionando. `docker compose start minio` y se recupera solo.
-4. **Explorar la API** en Swagger UI: cada endpoint documenta sus errores reales con ejemplos.
+4. **Explorar la API** en Swagger UI: cada endpoint documenta sus errores reales con ejemplos. O correr la
+   [colección de Postman](docs/postman/README.md), que recorre todos los endpoints y reglas de negocio con tests.
 5. **Leer el código clave**: el [listado con Criteria API](backend/src/main/java/com/lebane/departamento/repository/DepartamentoListadoRepositoryImpl.java),
    la [ejecución resiliente](backend/src/main/java/com/lebane/resilience/ResilientExecutor.java) y el
    [manejo de errores](backend/src/main/java/com/lebane/exception/GlobalExceptionHandler.java).
@@ -171,3 +172,4 @@ El **CI** ([GitHub Actions](.github/workflows/ci.yml)) corre todo en cada PR, in
 | [Calidad](docs/calidad.md) | Tests, cobertura, E2E, CI y validación final de punta a punta |
 | [Decisiones técnicas](docs/decisiones.md) | Decisiones técnicas con su justificación |
 | [OpenAPI](docs/openapi.json) | Contrato de la API (también en Swagger UI) |
+| [Colección de Postman](docs/postman/README.md) | Todos los endpoints en orden, con tests (Postman o Newman) |
