@@ -82,6 +82,7 @@ class OpenApiSpecTest {
                 "/api/v1/departamentos",
                 "/api/v1/departamentos/{id}",
                 "/api/v1/departamentos/{id}/consultas",
+                "/api/v1/departamentos/{id}/reactivacion",
                 "/api/v1/departamentos/{departamentoId}/imagenes",
                 "/api/v1/departamentos/{departamentoId}/imagenes/{imagenId}",
                 "/api/v1/direcciones/autocompletar");
