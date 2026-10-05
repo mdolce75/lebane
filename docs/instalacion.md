@@ -55,7 +55,7 @@ Toda la configuración proviene de variables de entorno. `cp .env.example .env` 
 | `UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE` | `5MB` / `6MB` | Tamaño máximo por foto y por request (una foto por request). |
 | `SEED_ENABLED` | `false` (`.env.example`: `true`) | Carga datos de ejemplo idempotentes al arrancar. |
 | `FLYWAY_ENABLED` | `true` | Aplica las migraciones al arrancar. |
-| `ADDRESS_PROVIDER` | `stub` | `stub` (catálogo local, sin red) o `external` (API Georef). |
+| `ADDRESS_PROVIDER` | `stub` | `stub` (catálogo de ejemplo sin red, con pocas calles: Gorriti, Av. Santa Fe, Bv. Oroño, ...) o `external` (cualquier dirección real de Argentina con la API pública Georef, sin API key). |
 | `ADDRESS_PROVIDER_URL` / `ADDRESS_PROVIDER_API_KEY` | `https://apis.datos.gob.ar/georef/api` / — | Proveedor externo; la API key (opcional) va como `Authorization: Bearer` y nunca se registra. |
 | `ADDRESS_PROVIDER_TIMEOUT_MS` / `ADDRESS_PROVIDER_MAX_RESULTS` | `2000` / `5` | Timeout por intento y máximo de sugerencias. |
 | `R4J_CB_*`, `R4J_RETRY_*`, `ADDRESS_RETRY_MAX_ATTEMPTS` | ver `.env.example` | Ventana, umbral y espera del circuit breaker; reintentos y backoff. |
