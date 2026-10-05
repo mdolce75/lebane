@@ -80,6 +80,24 @@ class DevDataSeederIT {
     }
 
     @Test
+    void unAvisoDelSeedDadoDeBajaNoSeVuelveACrearNiRecibeConsultas() {
+        String consultasSeed0002 = "select count(*) from consulta c join departamento d on d.id = c.departamento_id "
+                + "where d.codigo = 'SEED-0002'";
+        jdbcTemplate.update("update departamento set fecha_baja = now() where codigo = 'SEED-0002'");
+        jdbcTemplate.update("delete from consulta where email like '%.s0002-%@example.com'");
+        int consultasAntes = count(consultasSeed0002);
+        try {
+            seeder.run(new DefaultApplicationArguments());
+
+            assertThat(count("select count(*) from departamento where codigo = 'SEED-0002'")).isEqualTo(1);
+            assertThat(count(consultasSeed0002)).isEqualTo(consultasAntes);
+        } finally {
+            jdbcTemplate.update("update departamento set fecha_baja = null where codigo = 'SEED-0002'");
+            seeder.run(new DefaultApplicationArguments());
+        }
+    }
+
+    @Test
     void existingSeedIsNotOverwritten() {
         jdbcTemplate.update("update departamento set titulo = 'Editado a mano' where codigo = 'SEED-0001'");
 
