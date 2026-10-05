@@ -5,11 +5,13 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -115,6 +117,25 @@ class DepartamentoControllerTest {
                         .header("If-Match", "\"4\"").content(TestFixtures.departamentoJson()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("ETag", "\"5\""));
+    }
+
+    @Test
+    void darDeBajaReturns204AndForwardsIfMatch() throws Exception {
+        mockMvc.perform(delete(BASE + "/15").header("If-Match", "\"4\""))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(departamentoService).darDeBaja(15L, Set.of(4L));
+    }
+
+    @Test
+    void darDeBajaDeUnoInexistenteOYaDadoDeBajaEs404() throws Exception {
+        doThrow(new ResourceNotFoundException("departamento"))
+                .when(departamentoService).darDeBaja(eq(99L), any());
+
+        mockMvc.perform(delete(BASE + "/99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 
     @Test
@@ -388,7 +409,7 @@ class DepartamentoControllerTest {
 
     @Test
     void unsupportedMethodReturns405WithAllowHeader() throws Exception {
-        mockMvc.perform(delete(BASE + "/15"))
+        mockMvc.perform(patch(BASE + "/15"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(header().exists("Allow"))
                 .andExpect(jsonPath("$.error").value("METHOD_NOT_ALLOWED"));

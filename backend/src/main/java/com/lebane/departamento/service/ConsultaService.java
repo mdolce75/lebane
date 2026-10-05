@@ -48,15 +48,15 @@ public class ConsultaService {
 
     @Transactional
     public ConsultaCreatedResponse crear(Long departamentoId, ConsultaRequest request) {
-        Departamento departamento = departamentoRepository.findById(departamentoId)
-                .orElseThrow(() -> new ResourceNotFoundException(DepartamentoService.RECURSO));
+        Departamento departamento = DepartamentoService.vigente(departamentoRepository.findById(departamentoId));
         if (!departamento.getEstado().aceptaConsultas()) {
             throw new BusinessRuleException(ErrorCode.DEPARTAMENTO_NO_DISPONIBLE,
                     "El departamento ya no está disponible y no recibe nuevas consultas");
         }
         // Bloquea la fila del departamento hasta el commit: dos envíos simultáneos (doble click, reintento) se
         // serializan y el segundo ve la consulta del primero.
-        departamentoRepository.lockById(departamentoId);
+        departamentoRepository.lockById(departamentoId)
+                .orElseThrow(() -> new ResourceNotFoundException(DepartamentoService.RECURSO));
         Consulta nueva = mapper.toEntity(departamento, request);
         if (consultaRepository.existeConsultaDesde(departamentoId,
                 nueva.getEmail(), clock.instant().minus(VENTANA_DUPLICADOS))) {

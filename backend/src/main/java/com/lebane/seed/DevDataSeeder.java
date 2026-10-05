@@ -117,9 +117,9 @@ public class DevDataSeeder implements ApplicationRunner {
             if (cantidad == 0 || id == null || imagenRepository.countByDepartamentoId(id) > 0) {
                 continue;
             }
-            // Un aviso ya vendido no cambia sus fotos (regla de negocio). Pasa si el storage no estaba disponible
-            // cuando se creó: queda sin fotos de ejemplo, pero el arranque no falla.
-            if (departamentoRepository.findById(id).map(d -> !d.getEstado().esModificable()).orElse(true)) {
+            // Un aviso vendido o dado de baja no cambia sus fotos (reglas de negocio). Pasa si el storage no estaba
+            // disponible cuando se creó: queda sin fotos de ejemplo, pero el arranque no falla.
+            if (!esModificable(id)) {
                 continue;
             }
             try {
@@ -146,7 +146,8 @@ public class DevDataSeeder implements ApplicationRunner {
         int agregadas = 0;
         for (SeedDepartamento seed : SeedData.departamentos()) {
             Long id = departamentoRepository.findIdByCodigo(seed.codigo()).orElse(null);
-            if (id == null) {
+            // Un aviso dado de baja a mano no vuelve a recibir consultas de ejemplo.
+            if (id == null || departamentoRepository.findById(id).map(Departamento::estaDadoDeBaja).orElse(true)) {
                 continue;
             }
             Integer nuevas = transactionTemplate.execute(status -> {
@@ -163,6 +164,12 @@ public class DevDataSeeder implements ApplicationRunner {
             agregadas += nuevas == null ? 0 : nuevas;
         }
         return agregadas;
+    }
+
+    private boolean esModificable(Long id) {
+        return departamentoRepository.findById(id)
+                .map(d -> !d.estaDadoDeBaja() && d.getEstado().esModificable())
+                .orElse(false);
     }
 
     /** @return {@code true} si se insertó; {@code false} si ya existía. */

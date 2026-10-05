@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -89,6 +90,16 @@ class ImagenServiceTest {
         assertThat(response.posicion()).isEqualTo(1);
         assertThat(response.contentType()).isEqualTo("image/png");
         assertThat(response.url()).isEqualTo("http://cdn/bucket/" + key.getValue());
+    }
+
+    @Test
+    void unDepartamentoDadoDeBajaNoRecibeFotosNiTocaElStorage() {
+        Departamento dadoDeBaja = new Departamento("DEP-X", EstadoDepartamento.DISPONIBLE);
+        dadoDeBaja.darDeBaja(Instant.parse("2026-10-05T12:00:00Z"));
+        when(departamentoRepository.findById(ID)).thenReturn(Optional.of(dadoDeBaja));
+
+        assertThatThrownBy(() -> service.subir(ID, png(), 1024)).isInstanceOf(ResourceNotFoundException.class);
+        verify(storage, never()).upload(anyString(), any(), anyLong(), anyString());
     }
 
     @Test

@@ -8,6 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -51,6 +54,9 @@ class DepartamentoServiceTest {
     @Mock
     private CodigoDepartamentoGenerator codigoGenerator;
 
+    private static final Instant AHORA = Instant.parse("2026-10-05T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(AHORA, ZoneOffset.UTC);
+
     private final DepartamentoMapper mapper = new DepartamentoMapper(
             new PublicBucketImageUrlResolver(TestStorageProperties.of("http://localhost:9000", "bucket")));
     private DepartamentoService service;
@@ -58,7 +64,7 @@ class DepartamentoServiceTest {
     @BeforeEach
     void setUp() {
         service = new DepartamentoService(departamentoRepository, imagenRepository, consultaRepository, mapper,
-                codigoGenerator);
+                codigoGenerator, CLOCK);
     }
 
     @Test
@@ -245,6 +251,52 @@ class DepartamentoServiceTest {
 
         assertThat(response.direccion().unidad()).isEqualTo("C");
         verify(departamentoRepository).exists(cualquierSpec());
+    }
+
+    @Test
+    void darDeBajaGuardaLaFechaSinBorrarNada() {
+        Departamento departamento = persisted(5L, 2L);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(departamento));
+
+        service.darDeBaja(5L, Set.of(2L));
+
+        assertThat(departamento.getFechaBaja()).isEqualTo(AHORA);
+        verify(departamentoRepository).flush();
+        verify(departamentoRepository, never()).delete(any(Departamento.class));
+        verifyNoInteractions(imagenRepository, consultaRepository);
+    }
+
+    @Test
+    void darDeBajaConVersionDesactualizadaEs412YNoCambiaNada() {
+        Departamento departamento = persisted(5L, 2L);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(departamento));
+
+        assertThatThrownBy(() -> service.darDeBaja(5L, Set.of(1L))).isInstanceOf(PreconditionFailedException.class);
+        assertThat(departamento.estaDadoDeBaja()).isFalse();
+    }
+
+    @Test
+    void unVendidoTambienSePuedeDarDeBaja() {
+        Departamento vendido = persisted(5L, 2L);
+        vendido.cambiarEstado(EstadoDepartamento.VENDIDO);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(vendido));
+
+        service.darDeBaja(5L, Set.of());
+
+        assertThat(vendido.estaDadoDeBaja()).isTrue();
+    }
+
+    @Test
+    void unDepartamentoDadoDeBajaNoExisteParaLaApi() {
+        Departamento dadoDeBaja = persisted(5L, 3L);
+        dadoDeBaja.darDeBaja(AHORA);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(dadoDeBaja));
+
+        assertThatThrownBy(() -> service.obtenerDetalle(5L)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.actualizar(5L, TestFixtures.departamento(), Set.of()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.darDeBaja(5L, Set.of())).isInstanceOf(ResourceNotFoundException.class);
+        verify(departamentoRepository, never()).flush();
     }
 
     private static Specification<Departamento> cualquierSpec() {

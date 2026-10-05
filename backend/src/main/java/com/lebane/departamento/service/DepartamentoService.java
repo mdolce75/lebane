@@ -2,7 +2,9 @@ package com.lebane.departamento.service;
 
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
+import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -44,15 +46,17 @@ public class DepartamentoService {
     private final ConsultaRepository consultaRepository;
     private final DepartamentoMapper mapper;
     private final CodigoDepartamentoGenerator codigoGenerator;
+    private final Clock clock;
 
     public DepartamentoService(DepartamentoRepository departamentoRepository, ImagenRepository imagenRepository,
             ConsultaRepository consultaRepository, DepartamentoMapper mapper,
-            CodigoDepartamentoGenerator codigoGenerator) {
+            CodigoDepartamentoGenerator codigoGenerator, Clock clock) {
         this.departamentoRepository = departamentoRepository;
         this.imagenRepository = imagenRepository;
         this.consultaRepository = consultaRepository;
         this.mapper = mapper;
         this.codigoGenerator = codigoGenerator;
+        this.clock = clock;
     }
 
     @Transactional
@@ -96,6 +100,22 @@ public class DepartamentoService {
         return detalle(departamento);
     }
 
+    /**
+     * Baja lógica con concurrencia optimista: igual que la edición, si {@code If-Match} no coincide responde 412 sin
+     * cambiar nada. Cualquier estado se puede dar de baja (también un vendido, para sacarlo del listado). Desde ese
+     * momento el departamento responde 404 en toda la API, y su dirección queda libre para otro aviso.
+     */
+    @Transactional
+    public void darDeBaja(Long id, Set<Long> versionesEsperadas) {
+        Departamento departamento = buscar(id);
+        if (!versionesEsperadas.isEmpty() && !versionesEsperadas.contains(departamento.getVersion())) {
+            throw new PreconditionFailedException();
+        }
+        departamento.darDeBaja(clock.instant());
+        departamentoRepository.flush();
+        log.info("Departamento dado de baja", kv("departamentoId", id), kv("codigo", departamento.getCodigo()));
+    }
+
     public DepartamentoDetailResponse obtenerDetalle(Long id) {
         return detalle(buscar(id));
     }
@@ -106,8 +126,14 @@ public class DepartamentoService {
         return mapper.toDetail(departamento, imagenes, cantidadConsultas);
     }
 
+    /** Un departamento dado de baja no existe para la API: 404, igual que uno inexistente. */
     private Departamento buscar(Long id) {
-        return departamentoRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException(RECURSO));
+        return vigente(departamentoRepository.findById(id));
+    }
+
+    static Departamento vigente(Optional<Departamento> departamento) {
+        return departamento.filter(d -> !d.estaDadoDeBaja())
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO));
     }
 
     /**

@@ -32,6 +32,7 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 | `POST` | `/api/v1/departamentos` | Alta (no como `VENDIDO` ni en la dirección de otro publicado) | `201` + `Location` + `ETag` · `400` · `409` |
 | `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas) | `200` + `ETag` · `400` · `404` |
 | `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional; un `VENDIDO` no se edita | `200` + `ETag` · `400` · `404` · `409` · `412` |
+| `DELETE` | `/api/v1/departamentos/{id}` | Baja lógica (ver abajo); `If-Match` opcional | `204` · `400` · `404` · `412` |
 | `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido o repetida) |
 | `POST` | `/api/v1/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](arquitectura.md#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
 | `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` · `409` (vendido) |
@@ -100,6 +101,21 @@ DISPONIBLE ⇄ RESERVADO
   `412`, para que el cliente recargue y vea el estado actual.
 - Las reglas viven en el enum (`transicionesPermitidas`, `esModificable`, `admiteAlta`) y se aplican en los servicios;
   el frontend las replica para no ofrecer opciones que el backend va a rechazar.
+
+**Baja lógica**:
+
+- `DELETE /api/v1/departamentos/{id}` no borra el registro: guarda la fecha en `fecha_baja`. Desde ese momento el
+  departamento no aparece en el listado ni cuenta en el total, y el detalle, la edición, las fotos, las consultas y
+  una segunda baja responden `404`, igual que si no existiera.
+- Se conservan el departamento, sus fotos (también en MinIO) y sus consultas, como historial. La dirección queda libre
+  para otro aviso.
+- Se puede dar de baja en cualquier estado, también vendido, para sacarlo del listado. Es definitiva.
+- Con `If-Match` desactualizado responde `412` sin darlo de baja, igual que la edición.
+- Una operación en curso sobre el mismo departamento no le agrega datos después de la baja: subir una foto y enviar
+  una consulta bloquean la fila (`SELECT … FOR UPDATE`) solo si sigue vigente, y la baja también toma ese lock.
+- Todas las consultas filtran `fecha_baja IS NULL` con la Criteria API (`DepartamentoSpecifications.noDadoDeBaja`).
+  No se usa `@SQLRestriction` ni `@SoftDelete` de Hibernate: el filtro queda explícito y el seed puede ver los dados
+  de baja para no volver a crearlos.
 
 **Duplicados**:
 
@@ -278,22 +294,27 @@ control negativo comprueba que la medición sí detecta un seq scan real.
 
 | Consulta | Plan | Tiempo |
 |---|---|---|
-| Página por defecto (`created_at DESC`) | `Index Scan Backward` en `ix_departamento_created` + `Limit` | 0,2 ms |
-| Página profunda (offset 9.900, 100 filas) | `Index Scan Backward` en `ix_departamento_created` (lee 10.000 entradas) | 3,2 ms |
-| `estado = VENDIDO` (página) | `Index Scan Backward` en `ix_departamento_estado_created` | 0,08 ms |
-| `estado = VENDIDO` (`COUNT`) | `Index Only Scan` en `ix_departamento_estado_created`, `Heap Fetches: 0` | 4,3 ms |
-| `ciudad = rosario` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro (1 de cada 8 coincide) | 0,1 ms |
-| `ciudad = rosario` (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_ciudad_created` | 8,5 ms |
-| USD entre 100k y 200k, orden por precio | `Index Scan` en `ix_departamento_moneda_precio` (rango en el índice) | 0,1 ms |
-| `q = balcón` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro | 0,1 ms |
-| `q = reciclado` + ciudad (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_titulo_trgm` (trigramas) | 22,6 ms |
-| `COUNT` sin filtros | `Index Only Scan` en `pk_departamento`, `Heap Fetches: 0` | 15,9 ms |
-| Agregados de 20 IDs | Subconsultas correlacionadas: `Index Only Scan` en `uk_imagen_departamento_posicion` e `ix_consulta_departamento` (`Heap Fetches: 0`), `Index Scan` para la foto principal | 0,6 ms |
+| Página por defecto (`created_at DESC`) | `Index Scan Backward` en `ix_departamento_created` + `Limit` | 0,1 ms |
+| Página profunda (offset 9.900, 100 filas) | `Index Scan Backward` en `ix_departamento_created` (lee 10.000 entradas) | 4,1 ms |
+| `estado = VENDIDO` (página) | `Index Scan Backward` en `ix_departamento_estado_created` | 0,1 ms |
+| `estado = VENDIDO` (`COUNT`) | `Index Only Scan` en `ix_departamento_estado_created`, `Heap Fetches: 0` | 4,7 ms |
+| `ciudad = rosario` (página) | `Index Scan Backward` en `ix_departamento_ciudad_created` | 0,08 ms |
+| `ciudad = rosario` (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_ciudad_created` | 7,3 ms |
+| USD entre 100k y 200k, orden por precio | `Index Scan` en `ix_departamento_moneda_precio` (rango en el índice) | 0,08 ms |
+| `q = balcón` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro | 0,2 ms |
+| `q = reciclado` + ciudad (`COUNT`) | `BitmapAnd` de `ix_departamento_ciudad_created` e `ix_departamento_titulo_trgm` (trigramas) | 12,4 ms |
+| `COUNT` sin filtros | `Index Only Scan` en `ix_departamento_vigentes`, `Heap Fetches: 0` | 15,3 ms |
+| Agregados de 20 IDs | Subconsultas correlacionadas: `Index Only Scan` en `uk_imagen_departamento_posicion` e `ix_consulta_departamento_email` (`Heap Fetches: 0`), `Index Scan` para la foto principal | 0,5 ms |
 
 Ningún plan contiene `Seq Scan`. Cuando el filtro es poco selectivo, PostgreSQL elige recorrer el índice del orden
 y filtrar hasta completar la página (más barato que usar el índice del filtro y ordenar). Un `COUNT` exacto debe
-contar todas las filas que cumplen el filtro: sin filtros es O(n) sobre el índice más chico (16 ms con 100k filas).
+contar todas las filas que cumplen el filtro: sin filtros es O(n) sobre el índice más chico (15 ms con 100k filas).
 Por eso se omite cuando la página permite deducir el total.
+
+Todas las consultas del listado filtran `fecha_baja IS NULL` (baja lógica). Los índices del listado son parciales con
+esa misma condición (`V4__baja_logica.sql`): siguen sirviendo para los `COUNT` sin leer la tabla y no guardan los
+dados de baja. La excepción es el de trigramas: como índice parcial, PostgreSQL perdía las estadísticas de
+`lower(titulo)` y elegía un plan peor para la búsqueda de texto.
 
 Reproducir sobre una base descartable, sin tocar la de desarrollo:
 
@@ -302,6 +323,8 @@ P="docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U lebane"
 $P -d lebane -c "CREATE DATABASE lebane_perf"
 $P -d lebane_perf < backend/src/main/resources/db/migration/V1__esquema_inicial.sql
 $P -d lebane_perf < backend/src/main/resources/db/migration/V2__indices_listado.sql
+$P -d lebane_perf < backend/src/main/resources/db/migration/V3__indices_reglas_duplicados.sql
+$P -d lebane_perf < backend/src/main/resources/db/migration/V4__baja_logica.sql
 $P -d lebane_perf < backend/src/test/resources/perf/datos-volumen.sql
 $P -d lebane_perf -c "VACUUM ANALYZE departamento, imagen, consulta"
 $P -d lebane_perf < backend/src/test/resources/perf/explain-listado.sql

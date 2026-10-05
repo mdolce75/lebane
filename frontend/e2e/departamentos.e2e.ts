@@ -179,3 +179,21 @@ test.describe('Edición', () => {
     expect(final.body).toMatchObject({ titulo: deOtro, precio: 123456 });
   });
 });
+
+test.describe('Baja', () => {
+  test('da de baja con confirmación: sale del listado y la API responde 404', async ({ page, request }) => {
+    const { id, titulo } = await crearDepartamento(request);
+    await page.goto(`/departamentos/${id}`);
+    await expect(page.getByRole('heading', { level: 1, name: titulo })).toBeVisible();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Dar de baja' }).click();
+
+    await expect(page).toHaveURL(/\/departamentos$/);
+    await expect(page.getByText(/dado de baja\./)).toBeVisible();
+    expect((await request.get(`/api/v1/departamentos/${id}`)).status()).toBe(404);
+
+    await page.goto(`/departamentos?q=${encodeURIComponent(titulo.split(' ')[0]!)}`);
+    await expect(page.getByText('0 departamentos')).toBeVisible();
+  });
+});

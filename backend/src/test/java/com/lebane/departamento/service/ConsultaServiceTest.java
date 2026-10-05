@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,7 @@ class ConsultaServiceTest {
     @BeforeEach
     void setUp() {
         service = new ConsultaService(departamentoRepository, consultaRepository, new ConsultaMapper(), CLOCK);
+        lenient().when(departamentoRepository.lockById(7L)).thenReturn(Optional.of(7L));
     }
 
     @ParameterizedTest
@@ -115,5 +117,27 @@ class ConsultaServiceTest {
         orden.verify(consultaRepository).existeConsultaDesde(7L,
                 "ana.perez@example.com", AHORA.minus(ConsultaService.VENTANA_DUPLICADOS));
         orden.verify(consultaRepository).saveAndFlush(any());
+    }
+
+    @Test
+    void unDepartamentoDadoDeBajaNoRecibeConsultas() {
+        Departamento dadoDeBaja = new Departamento("DEP-X", EstadoDepartamento.DISPONIBLE);
+        dadoDeBaja.darDeBaja(AHORA);
+        when(departamentoRepository.findById(7L)).thenReturn(Optional.of(dadoDeBaja));
+
+        assertThatThrownBy(() -> service.crear(7L, TestFixtures.consulta()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(consultaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void siSeDioDeBajaMientrasTantoElLockNoLoEncuentraYNoGuarda() {
+        when(departamentoRepository.findById(7L))
+                .thenReturn(Optional.of(new Departamento("DEP-X", EstadoDepartamento.DISPONIBLE)));
+        when(departamentoRepository.lockById(7L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.crear(7L, TestFixtures.consulta()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(consultaRepository, never()).saveAndFlush(any());
     }
 }
