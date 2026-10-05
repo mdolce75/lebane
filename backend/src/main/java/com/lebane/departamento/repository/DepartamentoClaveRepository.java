@@ -16,7 +16,10 @@ public interface DepartamentoClaveRepository {
      * operaciones de un mismo departamento que tienen que ver lo que hizo la anterior (límite de 5 fotos, consultas
      * duplicadas), sin bloquear lecturas ni otros departamentos.
      *
-     * @return el id si el departamento existe
+     * <p>Solo bloquea un departamento vigente: si se dio de baja mientras tanto (la baja también toma el lock de la
+     * fila), devuelve vacío y la operación responde 404 en lugar de agregarle datos.
+     *
+     * @return el id si el departamento existe y no fue dado de baja
      */
     Optional<Long> lockById(Long id);
 }

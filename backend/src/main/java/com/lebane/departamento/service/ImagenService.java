@@ -5,6 +5,7 @@ import static net.logstash.logback.argument.StructuredArguments.kv;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -72,8 +73,7 @@ public class ImagenService {
     }
 
     public ImagenResponse subir(Long departamentoId, InputStreamSource contenido, long sizeBytes) {
-        Departamento departamento = departamentoRepository.findById(departamentoId)
-                .orElseThrow(() -> new ResourceNotFoundException(DepartamentoService.RECURSO));
+        Departamento departamento = DepartamentoService.vigente(departamentoRepository.findById(departamentoId));
         validarModificable(departamento);
         ImageType tipo = validar(contenido, sizeBytes);
         if (imagenRepository.countByDepartamentoId(departamentoId) >= Imagen.MAX_POR_DEPARTAMENTO) {
@@ -100,7 +100,7 @@ public class ImagenService {
         String objectKey = transactionTemplate.execute(status -> {
             Imagen imagen = imagenRepository.findByIdAndDepartamentoId(imagenId, departamentoId)
                     .orElseThrow(() -> new ResourceNotFoundException("imagen"));
-            validarModificable(imagen.getDepartamento());
+            validarModificable(DepartamentoService.vigente(Optional.of(imagen.getDepartamento())));
             imagenRepository.delete(imagen);
             return imagen.getObjectKey();
         });

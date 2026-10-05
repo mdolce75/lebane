@@ -203,6 +203,46 @@ class DepartamentoApiIT {
         assertThat(detalle.path("cantidadConsultas").asLong()).isEqualTo(2);
     }
 
+    /** Baja lógica por HTTP: deja de existir para la API, conserva los datos y libera la dirección. */
+    @Test
+    void bajaLogicaOverHttp() throws Exception {
+        String titulo = "IT baja " + UUID.randomUUID().toString().substring(0, 8);
+        String alta = TestFixtures.departamentoJson(TestFixtures.unidadUnica())
+                .replace("3 ambientes en Palermo", titulo);
+        ResponseEntity<String> creado = rest.exchange(BASE, HttpMethod.POST, json(alta), String.class);
+        long id = objectMapper.readTree(creado.getBody()).path("id").asLong();
+        String etag = creado.getHeaders().getETag();
+        String url = BASE + "/" + id;
+        assertThat(rest.exchange(url + "/consultas", HttpMethod.POST, json(TestFixtures.consultaJson()), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        // Con un ETag desactualizado no se da de baja.
+        assertError(rest.exchange(url, HttpMethod.DELETE, json("", "\"99\""), String.class),
+                HttpStatus.PRECONDITION_FAILED, "PRECONDITION_FAILED");
+
+        ResponseEntity<String> baja = rest.exchange(url, HttpMethod.DELETE, json("", etag), String.class);
+        assertThat(baja.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        // Para la API ya no existe: detalle, edición, consultas, fotos, segunda baja y listado.
+        assertError(rest.getForEntity(url, String.class), HttpStatus.NOT_FOUND, "NOT_FOUND");
+        assertError(rest.exchange(url, HttpMethod.PUT, json(alta), String.class), HttpStatus.NOT_FOUND, "NOT_FOUND");
+        assertError(rest.exchange(url + "/consultas", HttpMethod.POST,
+                json(TestFixtures.consultaJson().replace("ana.perez@", "otra@")), String.class),
+                HttpStatus.NOT_FOUND, "NOT_FOUND");
+        assertError(rest.exchange(url, HttpMethod.DELETE, json("", null), String.class),
+                HttpStatus.NOT_FOUND, "NOT_FOUND");
+        JsonNode listado = objectMapper.readTree(
+                rest.getForEntity(BASE + "?q=" + titulo.substring(3), String.class).getBody());
+        assertThat(listado.path("page").path("totalElements").asLong()).isZero();
+
+        // El registro y sus consultas se conservan; la dirección queda libre para otro aviso.
+        assertThat(consultaRepository.countByDepartamentoId(id)).isEqualTo(1);
+        assertThat(departamentoRepository.findById(id)).get()
+                .satisfies(departamento -> assertThat(departamento.getFechaBaja()).isNotNull());
+        assertThat(rest.exchange(BASE, HttpMethod.POST, json(alta), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+    }
+
     private void assertError(ResponseEntity<String> response, HttpStatus status, String error) throws Exception {
         assertThat(response.getStatusCode()).isEqualTo(status);
         assertThat(objectMapper.readTree(response.getBody()).path("error").asText()).isEqualTo(error);

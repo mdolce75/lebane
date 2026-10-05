@@ -75,6 +75,10 @@ public class Departamento {
     @Embedded
     private Direccion direccion;
 
+    /** Baja lógica: cuándo se dio de baja; {@code null} mientras está publicado. */
+    @Column(name = "fecha_baja")
+    private Instant fechaBaja;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -112,6 +116,21 @@ public class Departamento {
 
     public void cambiarEstado(EstadoDepartamento nuevoEstado) {
         this.estado = Objects.requireNonNull(nuevoEstado, "estado");
+    }
+
+    /**
+     * Baja lógica: el departamento deja de existir para la API (listado, detalle, edición, fotos y consultas), pero el
+     * registro se conserva con sus fotos y consultas. Es definitiva: no hay alta de vuelta.
+     */
+    public void darDeBaja(Instant fecha) {
+        if (estaDadoDeBaja()) {
+            throw new IllegalStateException("El departamento " + codigo + " ya fue dado de baja");
+        }
+        this.fechaBaja = Objects.requireNonNull(fecha, "fecha");
+    }
+
+    public boolean estaDadoDeBaja() {
+        return fechaBaja != null;
     }
 
     public Long getId() {
@@ -160,6 +179,10 @@ public class Departamento {
 
     public Direccion getDireccion() {
         return direccion;
+    }
+
+    public Instant getFechaBaja() {
+        return fechaBaja;
     }
 
     public long getVersion() {

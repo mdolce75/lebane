@@ -16,6 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -167,6 +168,35 @@ public class DepartamentoController {
         DepartamentoDetailResponse actualizado =
                 departamentoService.actualizar(id, request, EntityTags.parseIfMatch(ifMatch));
         return ResponseEntity.ok().eTag(EntityTags.of(actualizado.version())).body(actualizado);
+    }
+
+    /**
+     * Baja lógica. {@code If-Match} es opcional, como en la edición: si se envía y otro usuario modificó el
+     * departamento desde la lectura, 412 sin darlo de baja.
+     */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
+    @Operation(summary = "Dar de baja un departamento",
+            description = "Baja lógica: el departamento deja de aparecer en el listado y responde 404 en el detalle, "
+                    + "la edición, las fotos y las consultas. El registro se conserva en la base con sus fotos y "
+                    + "consultas, como historial, y su dirección queda libre para otro aviso. Se puede dar de baja en "
+                    + "cualquier estado, también vendido. Es definitiva: una segunda baja responde 404. Enviar en "
+                    + "`If-Match` el ETag leído para no dar de baja una versión que otro usuario acaba de modificar "
+                    + "(412).")
+    @ApiResponse(responseCode = "204", description = "Departamento dado de baja")
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "412", ref = PRECONDITION_FAILED)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
+    public void darDeBaja(
+            @Parameter(description = "ID del departamento", example = "1") @PathVariable @Positive Long id,
+            @Parameter(in = ParameterIn.HEADER, name = HttpHeaders.IF_MATCH,
+                    description = "ETag leído (p. ej. \"3\"). Opcional: sin él, la baja no verifica la versión.",
+                    schema = @Schema(type = "string", example = "\"3\""))
+            @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        departamentoService.darDeBaja(id, EntityTags.parseIfMatch(ifMatch));
     }
 
     @PostMapping(path = "/{id}/consultas", consumes = MediaType.APPLICATION_JSON_VALUE)

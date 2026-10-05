@@ -37,9 +37,10 @@ public final class DepartamentoSpecifications {
     private DepartamentoSpecifications() {
     }
 
-    /** Combina con AND los filtros informados; sin filtros, no agrega WHERE. */
+    /** Combina con AND los filtros informados. Siempre excluye los dados de baja. */
     public static Specification<Departamento> conFiltro(DepartamentoFiltro filtro) {
         List<Specification<Departamento>> specs = new ArrayList<>();
+        specs.add(noDadoDeBaja());
         add(specs, tituloContiene(filtro.texto()));
         add(specs, ciudadIgual(filtro.ciudad()));
         add(specs, estadoEn(filtro.estados()));
@@ -155,6 +156,7 @@ public final class DepartamentoSpecifications {
         return (root, query, cb) -> {
             Path<Direccion> d = root.get(Departamento_.direccion);
             List<Predicate> predicados = new ArrayList<>(List.of(
+                    cb.isNull(root.get(Departamento_.fechaBaja)),
                     root.get(Departamento_.estado).in(EstadoDepartamento.activos()),
                     igualSinMayusculas(cb, d.get(Direccion_.calle), direccion.getCalle()),
                     igualSinMayusculas(cb, d.get(Direccion_.numero), direccion.getNumero()),
@@ -177,5 +179,10 @@ public final class DepartamentoSpecifications {
     /** Código comercial exacto; usa el índice único de {@code codigo}. */
     public static Specification<Departamento> conCodigo(String codigo) {
         return (root, query, cb) -> cb.equal(root.get(Departamento_.codigo), codigo);
+    }
+
+    /** Baja lógica: {@code fecha_baja IS NULL}. Un departamento dado de baja no se lista ni cuenta. */
+    public static Specification<Departamento> noDadoDeBaja() {
+        return (root, query, cb) -> cb.isNull(root.get(Departamento_.fechaBaja));
     }
 }
