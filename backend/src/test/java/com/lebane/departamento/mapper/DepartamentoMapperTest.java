@@ -100,7 +100,7 @@ class DepartamentoMapperTest {
     void listItemResolvesMainImageUrlOrNull() {
         DepartamentoListadoRow row = new DepartamentoListadoRow(7L, "DEP-X", "Título", new BigDecimal("1"),
                 Moneda.USD, 2, 1, 1, new BigDecimal("40"), EstadoDepartamento.DISPONIBLE, "CABA", "CABA",
-                Instant.parse("2026-10-01T12:00:00Z"));
+                Instant.parse("2026-10-01T12:00:00Z"), null);
 
         var conFoto = mapper.toListItem(row, new DepartamentoAgregados(3, "departamentos/7/p.jpg", 9));
         var sinFoto = mapper.toListItem(row, null);
@@ -118,9 +118,9 @@ class DepartamentoMapperTest {
     void filtroCollapsesRepeatedStates() {
         var params = new DepartamentoListadoParams(null, null,
                 List.of(EstadoDepartamento.VENDIDO, EstadoDepartamento.VENDIDO), null, null, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
         var sinEstados = new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
 
         assertThat(mapper.toFiltro(params).estados()).containsExactly(EstadoDepartamento.VENDIDO);
         assertThat(mapper.toFiltro(sinEstados).estados()).isEmpty();

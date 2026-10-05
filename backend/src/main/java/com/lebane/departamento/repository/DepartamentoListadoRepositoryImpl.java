@@ -58,7 +58,8 @@ class DepartamentoListadoRepositoryImpl implements DepartamentoListadoRepository
                 departamento.get(Departamento_.estado),
                 direccion.get(Direccion_.ciudad),
                 direccion.get(Direccion_.provincia),
-                departamento.get(Departamento_.createdAt)));
+                departamento.get(Departamento_.createdAt),
+                departamento.get(Departamento_.fechaBaja)));
 
         Predicate where = spec == null ? null : spec.toPredicate(departamento, query, cb);
         if (where != null) {

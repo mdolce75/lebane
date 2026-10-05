@@ -47,5 +47,7 @@ public record DepartamentoDetailResponse(
         @Schema(description = "Fecha de alta (UTC)", example = "2026-10-01T12:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
         Instant createdAt,
         @Schema(description = "Última modificación (UTC)", example = "2026-10-01T12:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
-        Instant updatedAt) {
+        Instant updatedAt,
+        @Schema(description = "Fecha de baja (UTC); null si está publicado. Un departamento dado de baja no admite cambios hasta reactivarlo")
+        Instant fechaBaja) {
 }

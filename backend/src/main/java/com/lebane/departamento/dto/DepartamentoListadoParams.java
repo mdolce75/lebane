@@ -53,6 +53,8 @@ public record DepartamentoListadoParams(
         @PositiveOrZero BigDecimal superficieMax,
         @Schema(description = "true: solo con fotos; false: solo sin fotos; omitido: todos")
         Boolean conImagenes,
+        @Schema(description = "true: solo los dados de baja (para reactivarlos); omitido o false: solo los publicados")
+        Boolean dadosDeBaja,
         @Schema(description = "Página, desde 0. (page + 1) × size no puede superar 10.000", example = "0", defaultValue = "0")
         @Min(0) Integer page,
         @Schema(description = "Tamaño de página", example = "20", defaultValue = "20")

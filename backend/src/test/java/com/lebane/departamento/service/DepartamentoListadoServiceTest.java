@@ -110,7 +110,7 @@ class DepartamentoListadoServiceTest {
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
 
         service.listar(new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null,
-                null, null, 2, 10, "precio,desc"));
+                null, null, null, 2, 10, "precio,desc"));
 
         verify(repository).buscarPagina(any(), pageable.capture());
         assertThat(pageable.getValue().getOffset()).isEqualTo(20);
@@ -119,13 +119,13 @@ class DepartamentoListadoServiceTest {
     }
 
     private static DepartamentoListadoParams params(int page, int size) {
-        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null,
+        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null, null,
                 page, size, null);
     }
 
     private DepartamentoListadoRow row(long id) {
         return new DepartamentoListadoRow(id, "DEP-" + id, "Título " + id, new BigDecimal("100000"), Moneda.USD, 3,
                 2, 1, new BigDecimal("70"), EstadoDepartamento.DISPONIBLE, "CABA", "CABA",
-                Instant.parse("2026-10-01T12:00:00Z"));
+                Instant.parse("2026-10-01T12:00:00Z"), null);
     }
 }

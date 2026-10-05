@@ -126,7 +126,8 @@ class ConsultaServiceTest {
         when(departamentoRepository.findById(7L)).thenReturn(Optional.of(dadoDeBaja));
 
         assertThatThrownBy(() -> service.crear(7L, TestFixtures.consulta()))
-                .isInstanceOf(ResourceNotFoundException.class);
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.DEPARTAMENTO_DADO_DE_BAJA));
         verify(consultaRepository, never()).saveAndFlush(any());
     }
 
@@ -137,7 +138,8 @@ class ConsultaServiceTest {
         when(departamentoRepository.lockById(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.crear(7L, TestFixtures.consulta()))
-                .isInstanceOf(ResourceNotFoundException.class);
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.DEPARTAMENTO_DADO_DE_BAJA));
         verify(consultaRepository, never()).saveAndFlush(any());
     }
 }

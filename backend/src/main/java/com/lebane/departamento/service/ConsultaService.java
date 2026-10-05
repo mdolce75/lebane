@@ -19,7 +19,6 @@ import com.lebane.departamento.repository.ConsultaRepository;
 import com.lebane.departamento.repository.DepartamentoRepository;
 import com.lebane.exception.BusinessRuleException;
 import com.lebane.exception.ErrorCode;
-import com.lebane.exception.ResourceNotFoundException;
 
 /**
  * Registro de consultas de interesados. Los datos personales nunca se registran en logs.
@@ -56,7 +55,7 @@ public class ConsultaService {
         // Bloquea la fila del departamento hasta el commit: dos envíos simultáneos (doble click, reintento) se
         // serializan y el segundo ve la consulta del primero.
         departamentoRepository.lockById(departamentoId)
-                .orElseThrow(() -> new ResourceNotFoundException(DepartamentoService.RECURSO));
+                .orElseThrow(DepartamentoService::dadoDeBaja);
         Consulta nueva = mapper.toEntity(departamento, request);
         if (consultaRepository.existeConsultaDesde(departamentoId,
                 nueva.getEmail(), clock.instant().minus(VENTANA_DUPLICADOS))) {

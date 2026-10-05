@@ -203,15 +203,17 @@ class DepartamentoApiIT {
         assertThat(detalle.path("cantidadConsultas").asLong()).isEqualTo(2);
     }
 
-    /** Baja lógica por HTTP: deja de existir para la API, conserva los datos y libera la dirección. */
+    /**
+     * Baja lógica y reactivación por HTTP: sale del listado, no admite cambios, conserva los datos, libera la dirección
+     * y se reactiva solo si la dirección sigue libre.
+     */
     @Test
-    void bajaLogicaOverHttp() throws Exception {
-        String titulo = "IT baja " + UUID.randomUUID().toString().substring(0, 8);
+    void bajaYReactivacionOverHttp() throws Exception {
+        String marca = "IT baja " + UUID.randomUUID().toString().substring(0, 8);
         String alta = TestFixtures.departamentoJson(TestFixtures.unidadUnica())
-                .replace("3 ambientes en Palermo", titulo);
+                .replace("3 ambientes en Palermo", marca);
         ResponseEntity<String> creado = rest.exchange(BASE, HttpMethod.POST, json(alta), String.class);
         long id = objectMapper.readTree(creado.getBody()).path("id").asLong();
-        String etag = creado.getHeaders().getETag();
         String url = BASE + "/" + id;
         assertThat(rest.exchange(url + "/consultas", HttpMethod.POST, json(TestFixtures.consultaJson()), String.class)
                 .getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -219,28 +221,50 @@ class DepartamentoApiIT {
         // Con un ETag desactualizado no se da de baja.
         assertError(rest.exchange(url, HttpMethod.DELETE, json("", "\"99\""), String.class),
                 HttpStatus.PRECONDITION_FAILED, "PRECONDITION_FAILED");
-
-        ResponseEntity<String> baja = rest.exchange(url, HttpMethod.DELETE, json("", etag), String.class);
+        ResponseEntity<String> baja = rest.exchange(url, HttpMethod.DELETE,
+                json("", creado.getHeaders().getETag()), String.class);
         assertThat(baja.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-        // Para la API ya no existe: detalle, edición, consultas, fotos, segunda baja y listado.
-        assertError(rest.getForEntity(url, String.class), HttpStatus.NOT_FOUND, "NOT_FOUND");
-        assertError(rest.exchange(url, HttpMethod.PUT, json(alta), String.class), HttpStatus.NOT_FOUND, "NOT_FOUND");
+        // Se lee (con fechaBaja) pero no admite cambios; sale del listado y aparece con dadosDeBaja=true.
+        ResponseEntity<String> detalle = rest.getForEntity(url, String.class);
+        assertThat(detalle.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(objectMapper.readTree(detalle.getBody()).path("fechaBaja").isNull()).isFalse();
+        assertError(rest.exchange(url, HttpMethod.PUT, json(alta), String.class),
+                HttpStatus.CONFLICT, "DEPARTAMENTO_DADO_DE_BAJA");
         assertError(rest.exchange(url + "/consultas", HttpMethod.POST,
                 json(TestFixtures.consultaJson().replace("ana.perez@", "otra@")), String.class),
-                HttpStatus.NOT_FOUND, "NOT_FOUND");
+                HttpStatus.CONFLICT, "DEPARTAMENTO_DADO_DE_BAJA");
         assertError(rest.exchange(url, HttpMethod.DELETE, json("", null), String.class),
-                HttpStatus.NOT_FOUND, "NOT_FOUND");
-        JsonNode listado = objectMapper.readTree(
-                rest.getForEntity(BASE + "?q=" + titulo.substring(3), String.class).getBody());
-        assertThat(listado.path("page").path("totalElements").asLong()).isZero();
-
-        // El registro y sus consultas se conservan; la dirección queda libre para otro aviso.
+                HttpStatus.CONFLICT, "DEPARTAMENTO_DADO_DE_BAJA");
+        assertThat(total(marca, false)).isZero();
+        assertThat(total(marca, true)).isEqualTo(1);
         assertThat(consultaRepository.countByDepartamentoId(id)).isEqualTo(1);
-        assertThat(departamentoRepository.findById(id)).get()
-                .satisfies(departamento -> assertThat(departamento.getFechaBaja()).isNotNull());
-        assertThat(rest.exchange(BASE, HttpMethod.POST, json(alta), String.class).getStatusCode())
-                .isEqualTo(HttpStatus.CREATED);
+
+        // La dirección queda libre: otro aviso la ocupa y la reactivación choca con él.
+        ResponseEntity<String> otro = rest.exchange(BASE, HttpMethod.POST, json(alta), String.class);
+        assertThat(otro.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertError(rest.exchange(url + "/reactivacion", HttpMethod.POST, json("", null), String.class),
+                HttpStatus.CONFLICT, "AVISO_DUPLICADO");
+
+        // Dado de baja el otro, se reactiva con la versión leída y vuelve al listado.
+        long otroId = objectMapper.readTree(otro.getBody()).path("id").asLong();
+        assertThat(rest.exchange(BASE + "/" + otroId, HttpMethod.DELETE, json("", null), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        String etag = rest.getForEntity(url, String.class).getHeaders().getETag();
+        ResponseEntity<String> reactivado = rest.exchange(url + "/reactivacion", HttpMethod.POST, json("", etag),
+                String.class);
+        assertThat(reactivado.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(objectMapper.readTree(reactivado.getBody()).path("fechaBaja").isNull()).isTrue();
+        assertThat(reactivado.getHeaders().getETag()).isNotEqualTo(etag);
+        assertError(rest.exchange(url + "/reactivacion", HttpMethod.POST, json("", null), String.class),
+                HttpStatus.CONFLICT, "DEPARTAMENTO_NO_DADO_DE_BAJA");
+        assertThat(total(marca, false)).isEqualTo(1);
+    }
+
+    private long total(String marca, boolean dadosDeBaja) throws Exception {
+        String url = BASE + "?q=" + marca.substring(3) + (dadosDeBaja ? "&dadosDeBaja=true" : "");
+        return objectMapper.readTree(rest.getForEntity(url, String.class).getBody())
+                .path("page").path("totalElements").asLong();
     }
 
     private void assertError(ResponseEntity<String> response, HttpStatus status, String error) throws Exception {

@@ -178,15 +178,16 @@ public class DepartamentoController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
     @Operation(summary = "Dar de baja un departamento",
-            description = "Baja lógica: el departamento deja de aparecer en el listado y responde 404 en el detalle, "
-                    + "la edición, las fotos y las consultas. El registro se conserva en la base con sus fotos y "
-                    + "consultas, como historial, y su dirección queda libre para otro aviso. Se puede dar de baja en "
-                    + "cualquier estado, también vendido. Es definitiva: una segunda baja responde 404. Enviar en "
-                    + "`If-Match` el ETag leído para no dar de baja una versión que otro usuario acaba de modificar "
-                    + "(412).")
+            description = "Baja lógica: el departamento sale del listado (se ve con `dadosDeBaja=true`) y no admite "
+                    + "cambios: edición, fotos, consultas y una segunda baja responden 409 `DEPARTAMENTO_DADO_DE_BAJA`. "
+                    + "El detalle se sigue pudiendo leer (con `fechaBaja`). El registro se conserva con sus fotos y "
+                    + "consultas, y su dirección queda libre para otro aviso. Se puede dar de baja en cualquier "
+                    + "estado, también vendido, y se revierte con la reactivación. Enviar en `If-Match` el ETag leído "
+                    + "para no dar de baja una versión que otro usuario acaba de modificar (412).")
     @ApiResponse(responseCode = "204", description = "Departamento dado de baja")
     @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
     @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "409", ref = CONFLICT)
     @ApiResponse(responseCode = "412", ref = PRECONDITION_FAILED)
     @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
     @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
@@ -197,6 +198,33 @@ public class DepartamentoController {
                     schema = @Schema(type = "string", example = "\"3\""))
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
         departamentoService.darDeBaja(id, EntityTags.parseIfMatch(ifMatch));
+    }
+
+    /** Revierte la baja lógica. {@code If-Match} opcional, como en la edición y la baja. */
+    @PostMapping("/{id}/reactivacion")
+    @Tag(name = OpenApiConfig.TAG_DEPARTAMENTOS)
+    @Operation(summary = "Reactivar un departamento dado de baja",
+            description = "Vuelve a publicarlo tal como estaba: mismo estado, datos, fotos y consultas. Si está "
+                    + "disponible o reservado y mientras tanto se publicó otro departamento en la misma dirección, "
+                    + "responde 409 `AVISO_DUPLICADO`. Si no estaba dado de baja, 409 `DEPARTAMENTO_NO_DADO_DE_BAJA`. "
+                    + "Sin cuerpo; enviar en `If-Match` el ETag leído (412 si otro usuario lo modificó).")
+    @ApiResponse(responseCode = "200", description = "Departamento reactivado",
+            headers = @Header(name = HttpHeaders.ETAG, description = "Nueva versión del departamento",
+                    schema = @Schema(type = "string", example = "\"5\"")))
+    @ApiResponse(responseCode = "400", ref = BAD_REQUEST)
+    @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    @ApiResponse(responseCode = "409", ref = CONFLICT)
+    @ApiResponse(responseCode = "412", ref = PRECONDITION_FAILED)
+    @ApiResponse(responseCode = "500", ref = INTERNAL_ERROR)
+    @ApiResponse(responseCode = "503", ref = SERVICE_UNAVAILABLE)
+    public ResponseEntity<DepartamentoDetailResponse> reactivar(
+            @Parameter(description = "ID del departamento", example = "1") @PathVariable @Positive Long id,
+            @Parameter(in = ParameterIn.HEADER, name = HttpHeaders.IF_MATCH,
+                    description = "ETag leído (p. ej. \"4\"). Opcional: sin él, la reactivación no verifica la versión.",
+                    schema = @Schema(type = "string", example = "\"4\""))
+            @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        DepartamentoDetailResponse reactivado = departamentoService.reactivar(id, EntityTags.parseIfMatch(ifMatch));
+        return ResponseEntity.ok().eTag(EntityTags.of(reactivado.version())).body(reactivado);
     }
 
     @PostMapping(path = "/{id}/consultas", consumes = MediaType.APPLICATION_JSON_VALUE)

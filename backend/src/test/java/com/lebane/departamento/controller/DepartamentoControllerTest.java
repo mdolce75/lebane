@@ -129,13 +129,33 @@ class DepartamentoControllerTest {
     }
 
     @Test
-    void darDeBajaDeUnoInexistenteOYaDadoDeBajaEs404() throws Exception {
+    void darDeBajaDeUnoInexistenteEs404() throws Exception {
         doThrow(new ResourceNotFoundException("departamento"))
                 .when(departamentoService).darDeBaja(eq(99L), any());
 
         mockMvc.perform(delete(BASE + "/99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    void reactivarReturns200WithEtagAndForwardsIfMatch() throws Exception {
+        when(departamentoService.reactivar(15L, Set.of(6L))).thenReturn(detalle(15L, 7));
+
+        mockMvc.perform(post(BASE + "/15/reactivacion").header("If-Match", "\"6\""))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"7\""))
+                .andExpect(jsonPath("$.id").value(15));
+    }
+
+    @Test
+    void reactivarUnoPublicadoEs409() throws Exception {
+        when(departamentoService.reactivar(eq(15L), any())).thenThrow(new BusinessRuleException(
+                ErrorCode.DEPARTAMENTO_NO_DADO_DE_BAJA, "El departamento no está dado de baja"));
+
+        mockMvc.perform(post(BASE + "/15/reactivacion"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("DEPARTAMENTO_NO_DADO_DE_BAJA"));
     }
 
     @Test
@@ -156,7 +176,7 @@ class DepartamentoControllerTest {
         DepartamentoListItemResponse item = new DepartamentoListItemResponse(15L, "DEP-ABCDEFGH", "3 ambientes",
                 new BigDecimal("185000.00"), Moneda.USD, 3, 2, 1, new BigDecimal("72.50"),
                 EstadoDepartamento.DISPONIBLE, "CABA", "CABA", "http://localhost:9000/b/a.jpg", 2, 4,
-                Instant.parse("2026-10-01T12:00:00Z"));
+                Instant.parse("2026-10-01T12:00:00Z"), null);
         when(listadoService.listar(any())).thenReturn(
                 new PagedModel<>(new PageImpl<>(List.of(item), PageRequest.of(1, 1), 3)));
 
@@ -435,6 +455,6 @@ class DepartamentoControllerTest {
                 new BigDecimal("185000.00"), Moneda.USD, 3, 2, 1, new BigDecimal("72.50"),
                 EstadoDepartamento.DISPONIBLE,
                 new DireccionResponse("Gorriti", "4850", "7", "B", "CABA", "CABA", "C1414", null, null, null),
-                List.of(), 2, version, Instant.parse("2026-10-01T12:00:00Z"), Instant.parse("2026-10-01T12:00:00Z"));
+                List.of(), 2, version, Instant.parse("2026-10-01T12:00:00Z"), Instant.parse("2026-10-01T12:00:00Z"), null);
     }
 }

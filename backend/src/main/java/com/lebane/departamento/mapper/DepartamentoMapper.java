@@ -69,7 +69,8 @@ public class DepartamentoMapper {
                 cantidadConsultas,
                 departamento.getVersion(),
                 departamento.getCreatedAt(),
-                departamento.getUpdatedAt());
+                departamento.getUpdatedAt(),
+                departamento.getFechaBaja());
     }
 
     /** Una fila del listado con sus agregados (calculados en PostgreSQL; ceros si no tiene fotos ni consultas). */
@@ -81,7 +82,7 @@ public class DepartamentoMapper {
         return new DepartamentoListItemResponse(row.id(), row.codigo(), row.titulo(), row.precio(), row.moneda(),
                 row.ambientes(), row.dormitorios(), row.banos(), row.superficieM2(), row.estado(), row.ciudad(),
                 row.provincia(), imagenPrincipalUrl, datos.cantidadImagenes(), datos.cantidadConsultas(),
-                row.createdAt());
+                row.createdAt(), row.fechaBaja());
     }
 
     /** Parámetros web (ya validados y normalizados) → criterios del repositorio. */
@@ -89,7 +90,8 @@ public class DepartamentoMapper {
         Set<EstadoDepartamento> estados = params.estado().isEmpty() ? Set.of() : EnumSet.copyOf(params.estado());
         return new DepartamentoFiltro(params.q(), params.ciudad(), estados, params.moneda(), params.precioMin(),
                 params.precioMax(), params.ambientesMin(), params.dormitoriosMin(), params.banosMin(),
-                params.superficieMin(), params.superficieMax(), params.conImagenes());
+                params.superficieMin(), params.superficieMax(), params.conImagenes(),
+                Boolean.TRUE.equals(params.dadosDeBaja()));
     }
 
     public ImagenResponse toResponse(Imagen imagen) {

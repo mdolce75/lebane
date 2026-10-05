@@ -119,14 +119,22 @@ public class Departamento {
     }
 
     /**
-     * Baja lógica: el departamento deja de existir para la API (listado, detalle, edición, fotos y consultas), pero el
-     * registro se conserva con sus fotos y consultas. Es definitiva: no hay alta de vuelta.
+     * Baja lógica: el departamento sale del listado y no admite cambios (edición, fotos ni consultas), pero el registro
+     * se conserva con sus fotos y consultas. Se revierte con {@link #reactivar()}.
      */
     public void darDeBaja(Instant fecha) {
         if (estaDadoDeBaja()) {
             throw new IllegalStateException("El departamento " + codigo + " ya fue dado de baja");
         }
         this.fechaBaja = Objects.requireNonNull(fecha, "fecha");
+    }
+
+    /** Vuelve a publicarlo tal como estaba (mismo estado, datos, fotos y consultas). */
+    public void reactivar() {
+        if (!estaDadoDeBaja()) {
+            throw new IllegalStateException("El departamento " + codigo + " no está dado de baja");
+        }
+        this.fechaBaja = null;
     }
 
     public boolean estaDadoDeBaja() {

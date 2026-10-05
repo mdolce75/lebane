@@ -116,7 +116,7 @@ public class ImagenService {
 
     private Imagen registrar(Long departamentoId, String objectKey, ImageType tipo, long sizeBytes) {
         departamentoRepository.lockById(departamentoId)
-                .orElseThrow(() -> new ResourceNotFoundException(DepartamentoService.RECURSO));
+                .orElseThrow(DepartamentoService::dadoDeBaja);
         List<Integer> ocupadas = imagenRepository.findPosiciones(departamentoId);
         if (ocupadas.size() >= Imagen.MAX_POR_DEPARTAMENTO) {
             throw limiteAlcanzado();

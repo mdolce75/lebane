@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -287,16 +288,84 @@ class DepartamentoServiceTest {
     }
 
     @Test
-    void unDepartamentoDadoDeBajaNoExisteParaLaApi() {
+    void unDepartamentoDadoDeBajaSeLeePeroNoSeModifica() {
         Departamento dadoDeBaja = persisted(5L, 3L);
         dadoDeBaja.darDeBaja(AHORA);
         when(departamentoRepository.findById(5L)).thenReturn(Optional.of(dadoDeBaja));
 
-        assertThatThrownBy(() -> service.obtenerDetalle(5L)).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.actualizar(5L, TestFixtures.departamento(), Set.of()))
-                .isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.darDeBaja(5L, Set.of())).isInstanceOf(ResourceNotFoundException.class);
+        assertThat(service.obtenerDetalle(5L).fechaBaja()).isEqualTo(AHORA);
+        assertDadoDeBaja(() -> service.actualizar(5L, TestFixtures.departamento(), Set.of()));
+        assertDadoDeBaja(() -> service.darDeBaja(5L, Set.of()));
         verify(departamentoRepository, never()).flush();
+    }
+
+    @Test
+    void laVersionDesactualizadaSeInformaAntesQueLaBaja() {
+        Departamento dadoDeBaja = persisted(5L, 3L);
+        dadoDeBaja.darDeBaja(AHORA);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(dadoDeBaja));
+
+        assertThatThrownBy(() -> service.actualizar(5L, TestFixtures.departamento(), Set.of(1L)))
+                .isInstanceOf(PreconditionFailedException.class);
+    }
+
+    @Test
+    void reactivarLoVuelveAPublicarSiLaDireccionEstaLibre() {
+        Departamento dadoDeBaja = persisted(5L, 3L);
+        dadoDeBaja.darDeBaja(AHORA);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(dadoDeBaja));
+
+        DepartamentoDetailResponse response = service.reactivar(5L, Set.of(3L));
+
+        assertThat(response.fechaBaja()).isNull();
+        assertThat(dadoDeBaja.estaDadoDeBaja()).isFalse();
+        verify(departamentoRepository).exists(cualquierSpec());
+        verify(departamentoRepository).flush();
+    }
+
+    @Test
+    void reactivarConLaDireccionOcupadaEsDuplicadoYSigueDeBaja() {
+        Departamento dadoDeBaja = persisted(5L, 3L);
+        dadoDeBaja.darDeBaja(AHORA);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(dadoDeBaja));
+        when(departamentoRepository.exists(cualquierSpec())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.reactivar(5L, Set.of()))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.AVISO_DUPLICADO));
+        assertThat(dadoDeBaja.estaDadoDeBaja()).isTrue();
+    }
+
+    @Test
+    void unVendidoSeReactivaSinControlarLaDireccion() {
+        Departamento vendido = persisted(5L, 3L);
+        vendido.cambiarEstado(EstadoDepartamento.VENDIDO);
+        vendido.darDeBaja(AHORA);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(vendido));
+
+        service.reactivar(5L, Set.of());
+
+        assertThat(vendido.estaDadoDeBaja()).isFalse();
+        verify(departamentoRepository, never()).exists(cualquierSpec());
+    }
+
+    @Test
+    void reactivarUnoPublicadoOConVersionViejaNoCambiaNada() {
+        Departamento publicado = persisted(5L, 3L);
+        when(departamentoRepository.findById(5L)).thenReturn(Optional.of(publicado));
+
+        assertThatThrownBy(() -> service.reactivar(5L, Set.of()))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.DEPARTAMENTO_NO_DADO_DE_BAJA));
+        publicado.darDeBaja(AHORA);
+        assertThatThrownBy(() -> service.reactivar(5L, Set.of(1L))).isInstanceOf(PreconditionFailedException.class);
+        assertThat(publicado.estaDadoDeBaja()).isTrue();
+        verify(departamentoRepository, never()).flush();
+    }
+
+    private static void assertDadoDeBaja(ThrowingCallable accion) {
+        assertThatThrownBy(accion).isInstanceOfSatisfying(BusinessRuleException.class,
+                ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.DEPARTAMENTO_DADO_DE_BAJA));
     }
 
     private static Specification<Departamento> cualquierSpec() {

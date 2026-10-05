@@ -179,6 +179,11 @@ public class OpenApiConfig {
                 ejemplo("consultaDuplicada", "Consulta duplicada", 409, ErrorCode.CONSULTA_DUPLICADA,
                         "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas",
                         "/api/v1/departamentos/7/consultas", Map.of()),
+                ejemplo("dadoDeBaja", "Departamento dado de baja", 409, ErrorCode.DEPARTAMENTO_DADO_DE_BAJA,
+                        "El departamento está dado de baja: hay que reactivarlo para modificarlo",
+                        "/api/v1/departamentos/7", Map.of()),
+                ejemplo("noDadoDeBaja", "Reactivar uno publicado", 409, ErrorCode.DEPARTAMENTO_NO_DADO_DE_BAJA,
+                        "El departamento no está dado de baja", "/api/v1/departamentos/7/reactivacion", Map.of()),
                 ejemplo("concurrencia", "Modificación simultánea", 409, ErrorCode.CONCURRENT_MODIFICATION,
                         "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
                         "/api/v1/departamentos/7", Map.of())));

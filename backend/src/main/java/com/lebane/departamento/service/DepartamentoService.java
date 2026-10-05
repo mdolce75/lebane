@@ -83,10 +83,8 @@ public class DepartamentoService {
      */
     @Transactional
     public DepartamentoDetailResponse actualizar(Long id, DepartamentoRequest request, Set<Long> versionesEsperadas) {
-        Departamento departamento = buscar(id);
-        if (!versionesEsperadas.isEmpty() && !versionesEsperadas.contains(departamento.getVersion())) {
-            throw new PreconditionFailedException();
-        }
+        Departamento departamento = buscarConVersion(id, versionesEsperadas);
+        validarVigente(departamento);
         validarCambio(departamento.getEstado(), request.estado());
         // Solo si cambia la dirección: un aviso cargado antes de la regla sigue siendo editable.
         Direccion direccion = DepartamentoMapper.toDireccion(request.direccion());
@@ -103,17 +101,38 @@ public class DepartamentoService {
     /**
      * Baja lógica con concurrencia optimista: igual que la edición, si {@code If-Match} no coincide responde 412 sin
      * cambiar nada. Cualquier estado se puede dar de baja (también un vendido, para sacarlo del listado). Desde ese
-     * momento el departamento responde 404 en toda la API, y su dirección queda libre para otro aviso.
+     * momento sale del listado, no admite cambios (409 {@code DEPARTAMENTO_DADO_DE_BAJA}) y su dirección queda libre
+     * para otro aviso. El detalle se sigue pudiendo leer, para reactivarlo.
      */
     @Transactional
     public void darDeBaja(Long id, Set<Long> versionesEsperadas) {
-        Departamento departamento = buscar(id);
-        if (!versionesEsperadas.isEmpty() && !versionesEsperadas.contains(departamento.getVersion())) {
-            throw new PreconditionFailedException();
-        }
+        Departamento departamento = buscarConVersion(id, versionesEsperadas);
+        validarVigente(departamento);
         departamento.darDeBaja(clock.instant());
         departamentoRepository.flush();
         log.info("Departamento dado de baja", kv("departamentoId", id), kv("codigo", departamento.getCodigo()));
+    }
+
+    /**
+     * Revierte la baja: vuelve al listado con el mismo estado, datos, fotos y consultas. Si está disponible o reservado,
+     * su dirección no puede estar ocupada por otro aviso publicado mientras tanto (409 {@code AVISO_DUPLICADO}); un
+     * vendido no ocupa la dirección. Con concurrencia optimista, como la edición y la baja.
+     */
+    @Transactional
+    public DepartamentoDetailResponse reactivar(Long id, Set<Long> versionesEsperadas) {
+        Departamento departamento = buscarConVersion(id, versionesEsperadas);
+        if (!departamento.estaDadoDeBaja()) {
+            throw new BusinessRuleException(ErrorCode.DEPARTAMENTO_NO_DADO_DE_BAJA,
+                    "El departamento no está dado de baja");
+        }
+        if (EstadoDepartamento.activos().contains(departamento.getEstado())) {
+            validarDireccionLibre(departamento.getDireccion(), id);
+        }
+        departamento.reactivar();
+        departamentoRepository.flush();
+        log.info("Departamento reactivado", kv("departamentoId", id), kv("codigo", departamento.getCodigo()),
+                kv("version", departamento.getVersion()));
+        return detalle(departamento);
     }
 
     public DepartamentoDetailResponse obtenerDetalle(Long id) {
@@ -126,14 +145,42 @@ public class DepartamentoService {
         return mapper.toDetail(departamento, imagenes, cantidadConsultas);
     }
 
-    /** Un departamento dado de baja no existe para la API: 404, igual que uno inexistente. */
+    /** Cualquier departamento existente, también dado de baja (el detalle lo muestra para poder reactivarlo). */
     private Departamento buscar(Long id) {
-        return vigente(departamentoRepository.findById(id));
+        return departamentoRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException(RECURSO));
     }
 
+    /**
+     * Lectura para modificar: 404 si no existe y 412 si {@code If-Match} no coincide con la versión actual. Va antes
+     * que las reglas de negocio (409), para que el cliente recargue y vea el estado actual.
+     */
+    private Departamento buscarConVersion(Long id, Set<Long> versionesEsperadas) {
+        Departamento departamento = buscar(id);
+        if (!versionesEsperadas.isEmpty() && !versionesEsperadas.contains(departamento.getVersion())) {
+            throw new PreconditionFailedException();
+        }
+        return departamento;
+    }
+
+    /**
+     * Departamento que admite cambios (edición, baja, fotos, consultas): 404 si no existe, 409
+     * {@code DEPARTAMENTO_DADO_DE_BAJA} si está dado de baja.
+     */
     static Departamento vigente(Optional<Departamento> departamento) {
-        return departamento.filter(d -> !d.estaDadoDeBaja())
-                .orElseThrow(() -> new ResourceNotFoundException(RECURSO));
+        Departamento encontrado = departamento.orElseThrow(() -> new ResourceNotFoundException(RECURSO));
+        validarVigente(encontrado);
+        return encontrado;
+    }
+
+    static void validarVigente(Departamento departamento) {
+        if (departamento.estaDadoDeBaja()) {
+            throw dadoDeBaja();
+        }
+    }
+
+    static BusinessRuleException dadoDeBaja() {
+        return new BusinessRuleException(ErrorCode.DEPARTAMENTO_DADO_DE_BAJA,
+                "El departamento está dado de baja: hay que reactivarlo para modificarlo");
     }
 
     /**

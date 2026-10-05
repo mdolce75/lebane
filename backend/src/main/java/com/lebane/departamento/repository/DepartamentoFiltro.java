@@ -15,6 +15,7 @@ import com.lebane.departamento.entity.Moneda;
  * @param estados     cualquiera de los estados indicados
  * @param moneda      moneda; obligatoria para filtrar por precio
  * @param conImagenes {@code true}: solo con fotos; {@code false}: solo sin fotos
+ * @param dadosDeBaja {@code true}: solo los dados de baja; {@code false}: solo los publicados
  */
 public record DepartamentoFiltro(
         String texto,
@@ -28,9 +29,10 @@ public record DepartamentoFiltro(
         Integer banosMin,
         BigDecimal superficieMin,
         BigDecimal superficieMax,
-        Boolean conImagenes) {
+        Boolean conImagenes,
+        boolean dadosDeBaja) {
 
     public static DepartamentoFiltro sinFiltros() {
-        return new DepartamentoFiltro(null, null, Set.of(), null, null, null, null, null, null, null, null, null);
+        return new DepartamentoFiltro(null, null, Set.of(), null, null, null, null, null, null, null, null, null, false);
     }
 }

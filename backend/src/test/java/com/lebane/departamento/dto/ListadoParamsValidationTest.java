@@ -38,7 +38,7 @@ class ListadoParamsValidationTest {
     @Test
     void appliesDefaultsAndNormalizesText() {
         DepartamentoListadoParams params = new DepartamentoListadoParams("  balcón ", "   ", null, null, null, null,
-                null, null, null, null, null, null, null, null, " ");
+                null, null, null, null, null, null, null, null, null, " ");
 
         assertThat(params.q()).isEqualTo("balcón");
         assertThat(params.ciudad()).isNull();
@@ -54,7 +54,7 @@ class ListadoParamsValidationTest {
         DepartamentoListadoParams params = new DepartamentoListadoParams("balcón", "CABA",
                 List.of(EstadoDepartamento.DISPONIBLE, EstadoDepartamento.RESERVADO), Moneda.USD,
                 new BigDecimal("100000"), new BigDecimal("200000"), 2, 1, 1, new BigDecimal("40"),
-                new BigDecimal("90"), true, 3, 50, "precio,desc");
+                new BigDecimal("90"), true, null, 3, 50, "precio,desc");
 
         assertThat(validator.validate(params)).isEmpty();
     }
@@ -62,7 +62,7 @@ class ListadoParamsValidationTest {
     @Test
     void rejectsOutOfRangeValues() {
         DepartamentoListadoParams params = new DepartamentoListadoParams("ab", null, null, null, null, null, 0, -1, 0,
-                new BigDecimal("-1"), null, null, -1, 101, "titulo,asc");
+                new BigDecimal("-1"), null, null, null, -1, 101, "titulo,asc");
 
         assertThat(errors(params)).containsOnlyKeys("q", "ambientesMin", "dormitoriosMin", "banosMin",
                 "superficieMin", "page", "size", "sort");
@@ -79,7 +79,7 @@ class ListadoParamsValidationTest {
     void rangesMustNotBeInverted() {
         DepartamentoListadoParams precio = withPrecio(Moneda.USD, new BigDecimal("200"), new BigDecimal("100"));
         DepartamentoListadoParams superficie = new DepartamentoListadoParams(null, null, null, null, null, null, null,
-                null, null, new BigDecimal("90"), new BigDecimal("40"), null, null, null, null);
+                null, null, new BigDecimal("90"), new BigDecimal("40"), null, null, null, null, null);
 
         assertThat(errors(precio)).containsOnlyKeys("precioMax");
         assertThat(errors(superficie)).containsOnlyKeys("superficieMax");
@@ -95,12 +95,12 @@ class ListadoParamsValidationTest {
     }
 
     private static DepartamentoListadoParams withPrecio(Moneda moneda, BigDecimal min, BigDecimal max) {
-        return new DepartamentoListadoParams(null, null, null, moneda, min, max, null, null, null, null, null, null,
+        return new DepartamentoListadoParams(null, null, null, moneda, min, max, null, null, null, null, null, null, null,
                 null, null, null);
     }
 
     private static DepartamentoListadoParams page(int page, int size) {
-        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null,
+        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null, null,
                 page, size, null);
     }
 
