@@ -28,13 +28,13 @@
         "description" : "Listado paginado con filtros y orden, resueltos en la base de datos (nunca en memoria). Cada ítem trae su foto principal y la cantidad de fotos y de consultas. Los filtros se combinan con AND; los valores de `estado` se combinan con OR.",
         "operationId" : "listar",
         "parameters" : [ {
-          "description" : "Texto a buscar en el título (sin distinguir mayúsculas; mínimo 3 caracteres)",
+          "description" : "Texto a buscar en el título, sin distinguir mayúsculas ni acentos (balcon encuentra balcón); mínimo 3 caracteres",
           "in" : "query",
           "name" : "q",
           "required" : false,
           "schema" : {
             "type" : "string",
-            "description" : "Texto a buscar en el título (sin distinguir mayúsculas; mínimo 3 caracteres)",
+            "description" : "Texto a buscar en el título, sin distinguir mayúsculas ni acentos (balcon encuentra balcón); mínimo 3 caracteres",
             "maxLength" : 100,
             "minLength" : 3
           }

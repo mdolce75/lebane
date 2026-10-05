@@ -29,7 +29,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 // (y probablemente vacío) sin que el usuario lo pida.
 @Schema(description = "Filtros, orden y paginación del listado. Todos opcionales.")
 public record DepartamentoListadoParams(
-        @Schema(description = "Texto a buscar en el título (sin distinguir mayúsculas; mínimo 3 caracteres)")
+        @Schema(description = "Texto a buscar en el título, sin distinguir mayúsculas ni acentos (balcon encuentra balcón); mínimo 3 caracteres")
         @Size(min = 3, max = 100) String q,
         @Schema(description = "Ciudad exacta (sin distinguir mayúsculas)")
         @Size(max = 80) String ciudad,

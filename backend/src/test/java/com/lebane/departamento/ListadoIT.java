@@ -112,6 +112,23 @@ class ListadoIT {
     }
 
     @Test
+    void laBusquedaDeTextoNoDistingueAcentos() {
+        long conTilde = crear("Luminoso con balcón al frente", "100", Moneda.USD, 2, "40",
+                EstadoDepartamento.DISPONIBLE, new int[] {}, 0);
+        long sinTilde = crear("Balcon corrido y patio", "100", Moneda.USD, 2, "40", EstadoDepartamento.DISPONIBLE,
+                new int[] {}, 0);
+        long dieresis = crear("Pingüino: vista al río", "100", Moneda.USD, 2, "40", EstadoDepartamento.DISPONIBLE,
+                new int[] {}, 0);
+
+        assertThat(ids(params().q("balcon").build())).containsExactlyInAnyOrder(conTilde, sinTilde);
+        assertThat(ids(params().q("BALCÓN").build())).containsExactlyInAnyOrder(conTilde, sinTilde);
+        assertThat(ids(params().q("pinguino").build())).containsExactly(dieresis);
+        assertThat(ids(params().q("rio").build())).containsExactly(dieresis);
+        // Los comodines del usuario siguen siendo literales después de quitar los acentos.
+        assertThat(ids(params().q("bálc%").build())).isEmpty();
+    }
+
+    @Test
     void losDadosDeBajaSoloAparecenConSuFiltro() {
         long vigente = crear("Vigente", "100", Moneda.USD, 2, "40", EstadoDepartamento.DISPONIBLE, new int[] {}, 0);
         long baja = crear("De baja", "100", Moneda.USD, 2, "40", EstadoDepartamento.VENDIDO, new int[] {0}, 1);

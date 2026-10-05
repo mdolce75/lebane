@@ -43,11 +43,11 @@ select d1_0.id,d1_0.codigo,d1_0.precio from departamento d1_0
 \echo '=== 7. Búsqueda de texto (trigramas): página + COUNT'
 EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
 select d1_0.id,d1_0.codigo,d1_0.titulo,d1_0.created_at from departamento d1_0
- where d1_0.fecha_baja is null and lower(d1_0.titulo) like '%balcón%' escape '\'
+ where d1_0.fecha_baja is null and f_unaccent(lower(d1_0.titulo)) like f_unaccent('%balcón%') escape '\'
  order by d1_0.created_at desc,1 desc offset 0 rows fetch first 20 rows only;
 EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
 select count(d1_0.id) from departamento d1_0
- where d1_0.fecha_baja is null and lower(d1_0.titulo) like '%reciclado%' escape '\'
+ where d1_0.fecha_baja is null and f_unaccent(lower(d1_0.titulo)) like f_unaccent('%reciclado%') escape '\'
    and lower(d1_0.ciudad)='córdoba';
 
 \echo '=== 8. Agregados de una página de 20 IDs (imagen principal, fotos, consultas)'

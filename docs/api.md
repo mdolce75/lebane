@@ -213,7 +213,7 @@ agregados); el cliente nunca recibe más que una página.
 
 | Parámetro | Ejemplo | Regla |
 |---|---|---|
-| `q` | `q=balcón` | Texto contenido en el título, sin distinguir mayúsculas. 3 a 100 caracteres. `%` y `_` se buscan literalmente |
+| `q` | `q=balcon` | Texto contenido en el título, sin distinguir mayúsculas ni acentos (`balcon` encuentra `balcón`). 3 a 100 caracteres. `%` y `_` se buscan literalmente |
 | `ciudad` | `ciudad=rosario` | Ciudad exacta, sin distinguir mayúsculas |
 | `estado` | `estado=DISPONIBLE&estado=RESERVADO` o `estado=DISPONIBLE,RESERVADO` | Uno o más de `DISPONIBLE`, `RESERVADO`, `VENDIDO` |
 | `moneda` | `moneda=USD` | `ARS` o `USD`. **Obligatoria si se filtra por precio** (no se comparan montos de distintas monedas) |
@@ -312,8 +312,8 @@ control negativo comprueba que la medición sí detecta un seq scan real.
 | `ciudad = rosario` (página) | `Index Scan Backward` en `ix_departamento_ciudad_created` | 0,08 ms |
 | `ciudad = rosario` (`COUNT`) | `Bitmap Index Scan` en `ix_departamento_ciudad_created` | 7,3 ms |
 | USD entre 100k y 200k, orden por precio | `Index Scan` en `ix_departamento_moneda_precio` (rango en el índice) | 0,08 ms |
-| `q = balcón` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro | 0,2 ms |
-| `q = reciclado` + ciudad (`COUNT`) | `BitmapAnd` de `ix_departamento_ciudad_created` e `ix_departamento_titulo_trgm` (trigramas) | 12,4 ms |
+| `q = balcón` (página) | `Index Scan Backward` en `ix_departamento_created` + filtro | 0,4 ms |
+| `q = reciclado` + ciudad (`COUNT`) | `BitmapAnd` de `ix_departamento_ciudad_created` e `ix_departamento_titulo_trgm` (trigramas) | 19,9 ms (sin acentos: normaliza cada fila candidata) |
 | `COUNT` sin filtros | `Index Only Scan` en `ix_departamento_vigentes`, `Heap Fetches: 0` | 15,3 ms |
 | Agregados de 20 IDs | Subconsultas correlacionadas: `Index Only Scan` en `uk_imagen_departamento_posicion` e `ix_consulta_departamento_email` (`Heap Fetches: 0`), `Index Scan` para la foto principal | 0,5 ms |
 
@@ -325,7 +325,12 @@ Por eso se omite cuando la página permite deducir el total.
 Todas las consultas del listado filtran `fecha_baja IS NULL` (baja lógica). Los índices del listado son parciales con
 esa misma condición (`V4__baja_logica.sql`): siguen sirviendo para los `COUNT` sin leer la tabla y no guardan los
 dados de baja. La excepción es el de trigramas: como índice parcial, PostgreSQL perdía las estadísticas de
-`lower(titulo)` y elegía un plan peor para la búsqueda de texto.
+la expresión del título y elegía un plan peor para la búsqueda de texto.
+
+La búsqueda de texto no distingue acentos: compara `f_unaccent(lower(titulo))` con el patrón normalizado igual
+(`V6__busqueda_sin_acentos.sql`). `f_unaccent` envuelve `unaccent` en una función inmutable, que es lo que exige un
+índice, y el índice de trigramas usa esa misma expresión. Como `unaccent` también quita la tilde de la ñ, "pena"
+encuentra "peña": para buscar en títulos es preferible a no encontrar nada por un acento de más o de menos.
 
 Reproducir sobre una base descartable, sin tocar la de desarrollo:
 
@@ -336,6 +341,8 @@ $P -d lebane_perf < backend/src/main/resources/db/migration/V1__esquema_inicial.
 $P -d lebane_perf < backend/src/main/resources/db/migration/V2__indices_listado.sql
 $P -d lebane_perf < backend/src/main/resources/db/migration/V3__indices_reglas_duplicados.sql
 $P -d lebane_perf < backend/src/main/resources/db/migration/V4__baja_logica.sql
+$P -d lebane_perf < backend/src/main/resources/db/migration/V5__indice_dados_de_baja.sql
+$P -d lebane_perf < backend/src/main/resources/db/migration/V6__busqueda_sin_acentos.sql
 $P -d lebane_perf < backend/src/test/resources/perf/datos-volumen.sql
 $P -d lebane_perf -c "VACUUM ANALYZE departamento, imagen, consulta"
 $P -d lebane_perf < backend/src/test/resources/perf/explain-listado.sql
