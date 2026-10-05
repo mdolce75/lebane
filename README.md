@@ -76,6 +76,13 @@ La primera vez tarda unos minutos más (descarga imágenes y dependencias); desp
 | Health / readiness | http://localhost:8080/actuator/health/readiness |
 | Logs en Kibana (opcional) | `LOGSTASH_ENABLED=true` en `.env` y `docker compose --profile observability up -d` → http://localhost:5601 (usuario `elastic`, contraseña `ELASTIC_PASSWORD` del `.env`) |
 
+**Autocompletado de direcciones**: por defecto usa un catálogo de ejemplo sin red (`ADDRESS_PROVIDER=stub`), para que
+la app funcione en cualquier máquina sin depender de un servicio externo. Sugiere unas pocas calles, por ejemplo
+"Gorriti", "Av. Santa Fe" o "Bv. Oroño". Para buscar cualquier dirección real de Argentina con la API pública
+[Georef](https://datosgobar.github.io/georef-ar-api/), sin API key, poner `ADDRESS_PROVIDER=external` en `.env` y
+reiniciar el backend con `docker compose up -d --wait backend`. Si Georef no responde, la app sigue funcionando y la
+dirección se escribe a mano.
+
 Para bajarlo: `docker compose down` (conserva los datos) o `docker compose down -v` (borra base de datos, fotos y
 logs). Para volver a levantarlo alcanza con `docker compose up -d --wait`.
 
