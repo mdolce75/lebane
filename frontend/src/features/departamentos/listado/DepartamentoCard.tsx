@@ -12,7 +12,7 @@ export function DepartamentoCard({ departamento: d }: { departamento: Departamen
       </Link>
       <div className="card__body">
         <div className="card__top">
-          <EstadoBadge estado={d.estado} />
+          <EstadoBadge estado={d.estado} fechaBaja={d.fechaBaja} />
           <span className="muted card__codigo">{d.codigo}</span>
         </div>
         <h2 id={`dep-${d.id}`} className="card__title">

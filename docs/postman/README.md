@@ -1,7 +1,7 @@
 # Colección de Postman
 
 [`lebane.postman_collection.json`](lebane.postman_collection.json) recorre toda la API, en orden. Cada request trae
-tests, así que la colección completa funciona como una prueba de punta a punta del backend: 38 requests y 74
+tests, así que la colección completa funciona como una prueba de punta a punta del backend: 46 requests y 90
 verificaciones.
 
 | Carpeta | Qué prueba |
@@ -15,7 +15,7 @@ verificaciones.
 | 6. Venta: registro cerrado | Un vendido no se edita, no recibe consultas ni cambia sus fotos |
 | 7. Direcciones | Autocompletado y texto demasiado corto |
 | 8. Trazabilidad y errores | `X-Request-Id` de ida y vuelta, ruta inexistente y JSON mal formado |
-| 9. Baja lógica | 412 con ETag viejo, baja (204), 404 en detalle y segunda baja, fuera del listado, dirección libre |
+| 9. Baja lógica y reactivación | Baja con ETag viejo (412) y vigente (204), detalle con `fechaBaja`, 409 al modificar, filtro `dadosDeBaja`, dirección libre y ocupada al reactivar, reactivación (200). Al terminar, todas las direcciones que creó son distintas |
 
 Las requests comparten variables de la colección: la carpeta 2 crea un departamento y guarda `departamentoId` y
 `etag`, y las siguientes los usan. Cada ejecución usa una unidad y un email propios, así que se puede correr las

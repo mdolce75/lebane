@@ -86,6 +86,17 @@ describe('Edición de departamento', () => {
     expect(api.requests('PUT', DETALLE)).toHaveLength(0);
   });
 
+  it('un departamento dado de baja no se edita: remite a reactivarlo', async () => {
+    const api = mockApi().on('GET', DETALLE, detalle({ fechaBaja: '2026-10-05T12:00:00Z' }));
+    renderRoute('/departamentos/1/editar');
+
+    const aviso = await screen.findByRole('alert');
+    expect(aviso).toHaveTextContent('Este departamento está dado de baja.');
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Agregar fotos')).not.toBeInTheDocument();
+    expect(api.requests('PUT', DETALLE)).toHaveLength(0);
+  });
+
   it('ofrece solo los estados permitidos desde el actual', async () => {
     mockApi().on('GET', DETALLE, detalle({ estado: 'RESERVADO' }));
     renderRoute('/departamentos/1/editar');

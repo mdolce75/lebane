@@ -23,5 +23,6 @@ public record DepartamentoListadoRow(
         EstadoDepartamento estado,
         String ciudad,
         String provincia,
-        Instant createdAt) {
+        Instant createdAt,
+        Instant fechaBaja) {
 }

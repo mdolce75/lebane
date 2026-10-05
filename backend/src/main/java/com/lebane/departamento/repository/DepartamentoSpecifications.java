@@ -37,10 +37,13 @@ public final class DepartamentoSpecifications {
     private DepartamentoSpecifications() {
     }
 
-    /** Combina con AND los filtros informados. Siempre excluye los dados de baja. */
+    /**
+     * Combina con AND los filtros informados. Siempre separa vigentes de dados de baja: por defecto lista los
+     * publicados; con {@code dadosDeBaja}, solo los dados de baja (para reactivarlos).
+     */
     public static Specification<Departamento> conFiltro(DepartamentoFiltro filtro) {
         List<Specification<Departamento>> specs = new ArrayList<>();
-        specs.add(noDadoDeBaja());
+        specs.add(filtro.dadosDeBaja() ? dadoDeBaja() : noDadoDeBaja());
         add(specs, tituloContiene(filtro.texto()));
         add(specs, ciudadIgual(filtro.ciudad()));
         add(specs, estadoEn(filtro.estados()));
@@ -181,8 +184,13 @@ public final class DepartamentoSpecifications {
         return (root, query, cb) -> cb.equal(root.get(Departamento_.codigo), codigo);
     }
 
-    /** Baja lógica: {@code fecha_baja IS NULL}. Un departamento dado de baja no se lista ni cuenta. */
+    /** Baja lógica: {@code fecha_baja IS NULL}. Usa los índices parciales del listado. */
     public static Specification<Departamento> noDadoDeBaja() {
         return (root, query, cb) -> cb.isNull(root.get(Departamento_.fechaBaja));
+    }
+
+    /** {@code fecha_baja IS NOT NULL}. Usa {@code ix_departamento_bajas}. */
+    public static Specification<Departamento> dadoDeBaja() {
+        return (root, query, cb) -> cb.isNotNull(root.get(Departamento_.fechaBaja));
     }
 }

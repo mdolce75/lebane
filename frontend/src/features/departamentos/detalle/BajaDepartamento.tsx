@@ -1,23 +1,22 @@
 import { useState } from 'react';
 import { isHttpError } from '../../../shared/api/errors';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
-import { useDarDeBajaDepartamento, useDepartamento } from '../api/queries';
+import { useDarDeBajaDepartamento } from '../api/queries';
 
-type Props = { id: number; version: number; codigo: string; onBaja: () => void };
+type Props = { id: number; version: number; codigo: string; onBaja: () => void; onRecargar: () => void };
 
 /**
  * Botón de baja lógica con confirmación. Envía la versión mostrada: si otro usuario modificó el departamento desde
  * entonces, el backend responde 412 y se ofrece recargar antes de decidir.
  */
-export function BajaDepartamento({ id, version, codigo, onBaja }: Props) {
+export function BajaDepartamento({ id, version, codigo, onBaja, onRecargar }: Props) {
   const baja = useDarDeBajaDepartamento(id);
-  const { refetch } = useDepartamento(id);
   const [conflicto, setConflicto] = useState(false);
 
   const darDeBaja = async () => {
     const confirmado = window.confirm(
-      `¿Dar de baja ${codigo}? Deja de publicarse y no se puede volver a publicar. ` +
-        'Sus fotos y consultas se conservan como historial.',
+      `¿Dar de baja ${codigo}? Deja de publicarse y no admite cambios. Sus fotos y consultas se conservan, ` +
+        'y se puede reactivar desde el listado con el filtro "Ver solo los dados de baja".',
     );
     if (!confirmado) return;
     setConflicto(false);
@@ -39,7 +38,7 @@ export function BajaDepartamento({ id, version, codigo, onBaja }: Props) {
           <strong>Otro usuario modificó este departamento.</strong>
           <p>Recargalo para ver los cambios antes de darlo de baja.</p>
           <div className="alert__actions">
-            <button type="button" className="button button--ghost" onClick={() => { setConflicto(false); void refetch(); }}>
+            <button type="button" className="button button--ghost" onClick={() => { setConflicto(false); onRecargar(); }}>
               Recargar
             </button>
           </div>

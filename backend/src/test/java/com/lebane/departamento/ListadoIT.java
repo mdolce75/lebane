@@ -3,6 +3,7 @@ package com.lebane.departamento;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -111,11 +112,23 @@ class ListadoIT {
     }
 
     @Test
+    void losDadosDeBajaSoloAparecenConSuFiltro() {
+        long vigente = crear("Vigente", "100", Moneda.USD, 2, "40", EstadoDepartamento.DISPONIBLE, new int[] {}, 0);
+        long baja = crear("De baja", "100", Moneda.USD, 2, "40", EstadoDepartamento.VENDIDO, new int[] {0}, 1);
+        transactionTemplate.executeWithoutResult(status -> departamentoRepository.findById(baja).orElseThrow()
+                .darDeBaja(Instant.parse("2026-10-05T12:00:00Z")));
+
+        assertThat(ids(params().build())).containsExactly(vigente);
+        assertThat(ids(params().dadosDeBaja().build())).containsExactly(baja);
+        assertThat(ids(params().dadosDeBaja().estado(EstadoDepartamento.DISPONIBLE).build())).isEmpty();
+    }
+
+    @Test
     void cityFilterIgnoresCase() {
         long a = crear("Uno", "100", Moneda.USD, 2, "40", EstadoDepartamento.DISPONIBLE, new int[] {}, 0);
 
         assertThat(ids(new DepartamentoListadoParams(null, ciudad.toUpperCase(), null, null, null, null, null, null,
-                null, null, null, null, null, null, null))).containsExactly(a);
+                null, null, null, null, null, null, null, null))).containsExactly(a);
     }
 
     @Test
@@ -217,6 +230,7 @@ class ListadoIT {
         private Integer ambientesMin;
         private BigDecimal superficieMin;
         private BigDecimal superficieMax;
+        private Boolean dadosDeBaja;
         private Boolean conImagenes;
         private Integer page;
         private Integer size;
@@ -263,6 +277,11 @@ class ListadoIT {
             return this;
         }
 
+        ParamsBuilder dadosDeBaja() {
+            dadosDeBaja = true;
+            return this;
+        }
+
         ParamsBuilder page(int number, int pageSize) {
             page = number;
             size = pageSize;
@@ -276,7 +295,7 @@ class ListadoIT {
 
         DepartamentoListadoParams build() {
             return new DepartamentoListadoParams(q, ciudad, estado, moneda, precioMin, precioMax, ambientesMin, null,
-                    null, superficieMin, superficieMax, conImagenes, page, size, sort);
+                    null, superficieMin, superficieMax, conImagenes, dadosDeBaja, page, size, sort);
         }
     }
 }

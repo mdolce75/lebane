@@ -35,7 +35,8 @@
 - **Edición con `PUT` (reemplazo completo) + `ETag`/`If-Match`** en lugar de `PATCH`: el formulario de edición
   envía siempre el recurso completo y el ETag protege contra la pérdida de actualizaciones entre usuarios.
 - **Baja lógica** (`fecha_baja`) en lugar de borrado físico: las consultas de los interesados son datos del negocio
-  y no se pierden; la dirección queda libre para otro aviso. El filtro es explícito con Criteria
+  y no se pierden; la dirección queda libre para otro aviso, y la baja se puede revertir (reactivación). Un dado de
+  baja responde `409` al modificarlo y no `404`: existe, se lee y se reactiva; lo que no admite son cambios. El filtro es explícito con Criteria
   (`noDadoDeBaja`) y no `@SoftDelete`/`@SQLRestriction` de Hibernate, que lo aplicarían a todas las consultas,
   también a las del seed, que necesita ver los dados de baja para no recrearlos.
 - **`Location` relativo** en el alta: no depende del header `Host`, que detrás del proxy es el host interno.

@@ -25,6 +25,7 @@ export async function listarDepartamentos(params: ListadoParams, signal?: AbortS
       precioMax: params.precioMax,
       ambientesMin: params.ambientesMin,
       conImagenes: params.conImagenes,
+      dadosDeBaja: params.dadosDeBaja,
       page: params.page,
       size: params.size,
       sort: params.sort,
@@ -49,10 +50,18 @@ export async function actualizarDepartamento(id: number, version: number, payloa
 
 /**
  * Baja lógica con concurrencia optimista: `If-Match` con la versión leída (412 si otro usuario lo modificó).
- * Desde ahí el departamento responde 404 en toda la API.
+ * Sale del listado y no admite cambios hasta reactivarlo; el detalle se sigue pudiendo leer.
  */
 export async function darDeBajaDepartamento(id: number, version: number) {
   await http.delete<void>(`${BASE}/${id}`, { headers: { 'If-Match': `"${version}"` } });
+}
+
+/** Revierte la baja. Con `If-Match`, como la edición; 409 si la dirección la ocupa otro aviso publicado. */
+export async function reactivarDepartamento(id: number, version: number) {
+  const data = await http.post<unknown>(`${BASE}/${id}/reactivacion`, undefined, {
+    headers: { 'If-Match': `"${version}"` },
+  });
+  return parseResponse(departamentoDetalleSchema, data);
 }
 
 /** Una foto por request (el backend valida tipo por contenido, tamaño y límite de 5). */

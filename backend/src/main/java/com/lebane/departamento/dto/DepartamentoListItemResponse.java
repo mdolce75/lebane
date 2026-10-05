@@ -47,5 +47,7 @@ public record DepartamentoListItemResponse(
         @Schema(description = "Cantidad de consultas recibidas", example = "3", requiredMode = Schema.RequiredMode.REQUIRED)
         long cantidadConsultas,
         @Schema(description = "Fecha de alta (UTC)", example = "2026-10-01T12:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
-        Instant createdAt) {
+        Instant createdAt,
+        @Schema(description = "Fecha de baja (UTC); null si está publicado")
+        Instant fechaBaja) {
 }

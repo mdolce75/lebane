@@ -17,7 +17,7 @@ public interface DepartamentoClaveRepository {
      * duplicadas), sin bloquear lecturas ni otros departamentos.
      *
      * <p>Solo bloquea un departamento vigente: si se dio de baja mientras tanto (la baja también toma el lock de la
-     * fila), devuelve vacío y la operación responde 404 en lugar de agregarle datos.
+     * fila), devuelve vacío y la operación responde 409 en lugar de agregarle datos.
      *
      * @return el id si el departamento existe y no fue dado de baja
      */

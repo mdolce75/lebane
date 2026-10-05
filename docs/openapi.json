@@ -159,6 +159,15 @@
             "description" : "true: solo con fotos; false: solo sin fotos; omitido: todos"
           }
         }, {
+          "description" : "true: solo los dados de baja (para reactivarlos); omitido o false: solo los publicados",
+          "in" : "query",
+          "name" : "dadosDeBaja",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "description" : "true: solo los dados de baja (para reactivarlos); omitido o false: solo los publicados"
+          }
+        }, {
           "description" : "Página, desde 0. (page + 1) × size no puede superar 10.000",
           "example" : 0,
           "in" : "query",
@@ -479,7 +488,7 @@
     },
     "/api/v1/departamentos/{id}" : {
       "delete" : {
-        "description" : "Baja lógica: el departamento deja de aparecer en el listado y responde 404 en el detalle, la edición, las fotos y las consultas. El registro se conserva en la base con sus fotos y consultas, como historial, y su dirección queda libre para otro aviso. Se puede dar de baja en cualquier estado, también vendido. Es definitiva: una segunda baja responde 404. Enviar en `If-Match` el ETag leído para no dar de baja una versión que otro usuario acaba de modificar (412).",
+        "description" : "Baja lógica: el departamento sale del listado (se ve con `dadosDeBaja=true`) y no admite cambios: edición, fotos, consultas y una segunda baja responden 409 `DEPARTAMENTO_DADO_DE_BAJA`. El detalle se sigue pudiendo leer (con `fechaBaja`). El registro se conserva con sus fotos y consultas, y su dirección queda libre para otro aviso. Se puede dar de baja en cualquier estado, también vendido, y se revierte con la reactivación. Enviar en `If-Match` el ETag leído para no dar de baja una versión que otro usuario acaba de modificar (412).",
         "operationId" : "darDeBaja",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -529,6 +538,9 @@
           },
           "404" : {
             "$ref" : "#/components/responses/NotFound"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
           },
           "412" : {
             "$ref" : "#/components/responses/PreconditionFailed"
@@ -786,6 +798,91 @@
         "tags" : [ "Consultas" ]
       }
     },
+    "/api/v1/departamentos/{id}/reactivacion" : {
+      "post" : {
+        "description" : "Vuelve a publicarlo tal como estaba: mismo estado, datos, fotos y consultas. Si está disponible o reservado y mientras tanto se publicó otro departamento en la misma dirección, responde 409 `AVISO_DUPLICADO`. Si no estaba dado de baja, 409 `DEPARTAMENTO_NO_DADO_DE_BAJA`. Sin cuerpo; enviar en `If-Match` el ETag leído (412 si otro usuario lo modificó).",
+        "operationId" : "reactivar",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "ETag leído (p. ej. \"4\"). Opcional: sin él, la reactivación no verifica la versión.",
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "\"4\""
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DepartamentoDetailResponse"
+                }
+              }
+            },
+            "description" : "Departamento reactivado",
+            "headers" : {
+              "ETag" : {
+                "description" : "Nueva versión del departamento",
+                "schema" : {
+                  "type" : "string",
+                  "example" : "\"5\""
+                },
+                "style" : "simple"
+              },
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Conflict"
+          },
+          "412" : {
+            "$ref" : "#/components/responses/PreconditionFailed"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Reactivar un departamento dado de baja",
+        "tags" : [ "Departamentos" ]
+      }
+    },
     "/api/v1/direcciones/autocompletar" : {
       "get" : {
         "description" : "Sugerencias para una dirección parcial, con calle, altura, ciudad, provincia y coordenadas. Siempre responde 200 si los parámetros son válidos: si el proveedor externo falla, tarda o tiene el circuito abierto, devuelve `degradado: true`, sin sugerencias y con un mensaje para cargar la dirección a mano (nunca datos inventados).",
@@ -940,12 +1037,34 @@
                   "timestamp" : "2026-10-01T12:00:00Z"
                 }
               },
+              "dadoDeBaja" : {
+                "summary" : "Departamento dado de baja",
+                "value" : {
+                  "error" : "DEPARTAMENTO_DADO_DE_BAJA",
+                  "message" : "El departamento está dado de baja: hay que reactivarlo para modificarlo",
+                  "path" : "/api/v1/departamentos/7",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
               "limite" : {
                 "summary" : "Límite de fotos alcanzado",
                 "value" : {
                   "error" : "LIMITE_IMAGENES_ALCANZADO",
                   "message" : "El departamento ya tiene el máximo de 5 fotos",
                   "path" : "/api/v1/departamentos/7/imagenes",
+                  "requestId" : "7f3c2a9e-req-42",
+                  "status" : 409,
+                  "timestamp" : "2026-10-01T12:00:00Z"
+                }
+              },
+              "noDadoDeBaja" : {
+                "summary" : "Reactivar uno publicado",
+                "value" : {
+                  "error" : "DEPARTAMENTO_NO_DADO_DE_BAJA",
+                  "message" : "El departamento no está dado de baja",
+                  "path" : "/api/v1/departamentos/7/reactivacion",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1205,7 +1324,7 @@
           "error" : {
             "type" : "string",
             "description" : "Código estable del error. Los clientes pueden depender de él; el mensaje es solo informativo.",
-            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "TRANSICION_DE_ESTADO_INVALIDA", "AVISO_DUPLICADO", "CONSULTA_DUPLICADA", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
+            "enum" : [ "VALIDATION_ERROR", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "CONFLICT", "CONCURRENT_MODIFICATION", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "DEPARTAMENTO_NO_DISPONIBLE", "TRANSICION_DE_ESTADO_INVALIDA", "DEPARTAMENTO_DADO_DE_BAJA", "DEPARTAMENTO_NO_DADO_DE_BAJA", "AVISO_DUPLICADO", "CONSULTA_DUPLICADA", "LIMITE_IMAGENES_ALCANZADO", "STORAGE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "INTERNAL_ERROR" ]
           },
           "fieldErrors" : {
             "type" : "object",
@@ -1394,6 +1513,11 @@
             "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ],
             "example" : "DISPONIBLE"
           },
+          "fechaBaja" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Fecha de baja (UTC); null si está publicado. Un departamento dado de baja no admite cambios hasta reactivarlo"
+          },
           "id" : {
             "type" : "integer",
             "format" : "int64",
@@ -1498,6 +1622,11 @@
             "description" : "Estado comercial",
             "enum" : [ "DISPONIBLE", "RESERVADO", "VENDIDO" ],
             "example" : "DISPONIBLE"
+          },
+          "fechaBaja" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Fecha de baja (UTC); null si está publicado"
           },
           "id" : {
             "type" : "integer",

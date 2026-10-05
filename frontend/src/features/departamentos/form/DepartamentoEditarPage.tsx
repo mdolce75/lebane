@@ -50,7 +50,17 @@ export function DepartamentoEditarPage() {
       </nav>
       <h1>Editar {data.titulo}</h1>
 
-      {!esModificable(data.estado) && (
+      {data.fechaBaja && (
+        <div className="alert alert--warning" role="alert">
+          <strong>Este departamento está dado de baja.</strong>
+          <p>Para modificarlo, primero hay que reactivarlo desde el detalle.</p>
+          <div className="alert__actions">
+            <Link to={`/departamentos/${id}`} className="button button--ghost">Volver al detalle</Link>
+          </div>
+        </div>
+      )}
+
+      {!data.fechaBaja && !esModificable(data.estado) && (
         <div className="alert alert--warning" role="alert">
           <strong>Este departamento ya fue vendido.</strong>
           <p>Es un registro cerrado: no se pueden modificar sus datos ni sus fotos.</p>
@@ -74,7 +84,7 @@ export function DepartamentoEditarPage() {
         </div>
       )}
 
-      {esModificable(data.estado) && (
+      {!data.fechaBaja && esModificable(data.estado) && (
         <>
           {/* key: al recargar una versión nueva, el formulario se reinicia con esos datos. */}
           <DepartamentoForm

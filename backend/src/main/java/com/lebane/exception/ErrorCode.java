@@ -26,6 +26,10 @@ public enum ErrorCode {
     DEPARTAMENTO_NO_DISPONIBLE,
     /** Regla de negocio: el cambio de estado no está permitido (p. ej. salir de VENDIDO, o publicar como vendido). */
     TRANSICION_DE_ESTADO_INVALIDA,
+    /** Regla de negocio: el departamento está dado de baja; para modificarlo hay que reactivarlo. */
+    DEPARTAMENTO_DADO_DE_BAJA,
+    /** Regla de negocio: se pidió reactivar un departamento que no está dado de baja. */
+    DEPARTAMENTO_NO_DADO_DE_BAJA,
     /** Regla de negocio: ya hay un departamento publicado (no vendido) en la misma dirección. */
     AVISO_DUPLICADO,
     /** Regla de negocio: el mismo email ya consultó por el departamento en las últimas 24 horas. */

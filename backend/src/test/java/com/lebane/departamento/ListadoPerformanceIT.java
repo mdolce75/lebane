@@ -75,6 +75,12 @@ class ListadoPerformanceIT {
         String script = new ClassPathResource("perf/datos-volumen.sql").getContentAsString(StandardCharsets.UTF_8);
         long start = System.nanoTime();
         jdbcTemplate.execute(script);
+        // 1 % dados de baja: el listado los excluye y el filtro dadosDeBaja=true los muestra.
+        // Uno de cada 100 en orden de id (los ids avanzan de a 50: no sirve id % 100). Este UPDATE recorre la tabla:
+        // en la misma conexión se fuerza el envío de sus estadísticas, para que no se cuenten en el primer escenario.
+        jdbcTemplate.execute("UPDATE departamento SET fecha_baja = now() WHERE id IN (SELECT id FROM "
+                + "(SELECT id, row_number() OVER (ORDER BY id) AS n FROM departamento) t WHERE n % 100 = 0); "
+                + "SELECT pg_stat_force_next_flush()");
         // Estadísticas del planificador y mapa de visibilidad al día, como en una base en producción.
         jdbcTemplate.execute("VACUUM ANALYZE departamento, imagen, consulta");
         log.info("Volumen cargado: {} departamentos, {} imágenes, {} consultas en {} ms",
@@ -114,6 +120,12 @@ class ListadoPerformanceIT {
     void textSearch() {
         sinFullScans("q=balcón", params().q("balcón").build());
         sinFullScans("q=reciclado + ciudad", params().q("reciclado").ciudad("Córdoba").build());
+    }
+
+    @Test
+    void soloDadosDeBaja() {
+        sinFullScans("dados de baja", params().dadosDeBaja().build());
+        sinFullScans("dados de baja, orden precio", params().dadosDeBaja().sort("precio,asc").build());
     }
 
     @Test
@@ -212,6 +224,7 @@ class ListadoPerformanceIT {
         private BigDecimal precioMin;
         private BigDecimal precioMax;
         private Integer ambientesMin;
+        private Boolean dadosDeBaja;
         private Boolean conImagenes;
         private Integer page;
         private Integer size;
@@ -253,6 +266,11 @@ class ListadoPerformanceIT {
             return this;
         }
 
+        ParamsBuilder dadosDeBaja() {
+            dadosDeBaja = true;
+            return this;
+        }
+
         ParamsBuilder page(int number, int pageSize) {
             page = number;
             size = pageSize;
@@ -266,7 +284,7 @@ class ListadoPerformanceIT {
 
         DepartamentoListadoParams build() {
             return new DepartamentoListadoParams(q, ciudad, estado, moneda, precioMin, precioMax, ambientesMin, null,
-                    null, null, null, conImagenes, page, size, sort);
+                    null, null, null, conImagenes, dadosDeBaja, page, size, sort);
         }
     }
 }

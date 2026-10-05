@@ -22,6 +22,8 @@ export function FiltrosPanel({ params, onApply, onClear }: Props) {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FiltrosForm>({ resolver: zodResolver(filtrosSchema), defaultValues: filtrosFromParams(params) });
 
@@ -29,6 +31,12 @@ export function FiltrosPanel({ params, onApply, onClear }: Props) {
   useEffect(() => {
     reset(filtrosFromParams(params));
   }, [params, reset]);
+
+  // Un dado de baja no está disponible, reservado ni vendido para el usuario: con ese filtro, el estado no aplica.
+  const soloDadosDeBaja = watch('dadosDeBaja');
+  useEffect(() => {
+    if (soloDadosDeBaja) setValue('estado', []);
+  }, [soloDadosDeBaja, setValue]);
 
   return (
     <form className="filters" aria-label="Filtros" noValidate onSubmit={handleSubmit((form) => onApply(paramsFromFiltros(form)))}>
@@ -64,7 +72,19 @@ export function FiltrosPanel({ params, onApply, onClear }: Props) {
           </select>
         </FormField>
         <fieldset className="field">
+          <legend>Publicación</legend>
+          <div className="checkbox-group">
+            <label className="checkbox">
+              <input type="checkbox" {...register('dadosDeBaja')} />
+              Ver solo los dados de baja
+            </label>
+          </div>
+        </fieldset>
+        <fieldset className="field" disabled={soloDadosDeBaja} aria-describedby={soloDadosDeBaja ? 'f-estado-ayuda' : undefined}>
           <legend>Estado</legend>
+          {soloDadosDeBaja && (
+            <p id="f-estado-ayuda" className="field__hint">No se filtra por estado al ver los dados de baja.</p>
+          )}
           <div className="checkbox-group">
             {estados.map((estado) => (
               <label key={estado} className="checkbox">

@@ -18,6 +18,7 @@ export function item(overrides: Partial<DepartamentoItem> = {}): DepartamentoIte
     cantidadImagenes: 2,
     cantidadConsultas: 3,
     createdAt: '2026-10-01T12:00:00Z',
+    fechaBaja: null,
     ...overrides,
   };
 }
@@ -59,6 +60,7 @@ export function detalle(overrides: Partial<DepartamentoDetalle> = {}): Departame
     version: 3,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T13:00:00Z',
+    fechaBaja: null,
     ...overrides,
   };
 }

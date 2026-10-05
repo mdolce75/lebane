@@ -98,7 +98,9 @@ class ImagenServiceTest {
         dadoDeBaja.darDeBaja(Instant.parse("2026-10-05T12:00:00Z"));
         when(departamentoRepository.findById(ID)).thenReturn(Optional.of(dadoDeBaja));
 
-        assertThatThrownBy(() -> service.subir(ID, png(), 1024)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.subir(ID, png(), 1024))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.DEPARTAMENTO_DADO_DE_BAJA));
         verify(storage, never()).upload(anyString(), any(), anyLong(), anyString());
     }
 
