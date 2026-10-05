@@ -56,6 +56,10 @@
     {
       "key": "ocupanteId",
       "value": ""
+    },
+    {
+      "key": "ocupanteEtag",
+      "value": ""
     }
   ],
   "item": [
@@ -1865,7 +1869,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('responde 201', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('ocupanteId', pm.response.json().id);"
+                  "pm.collectionVariables.set('ocupanteId', pm.response.json().id);",
+                  "pm.collectionVariables.set('ocupanteEtag', pm.response.headers.get('ETag'));"
                 ]
               }
             }
@@ -1908,10 +1913,19 @@
           ]
         },
         {
-          "name": "Dar de baja el que ocupa la dirección",
+          "name": "Mudar a otra unidad el que ocupa la dirección",
           "request": {
-            "method": "DELETE",
-            "header": [],
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{ocupanteEtag}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/departamentos/{{ocupanteId}}",
               "host": [
@@ -1923,7 +1937,17 @@
                 "departamentos",
                 "{{ocupanteId}}"
               ]
-            }
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"PostmanBaja{{marcaBaja}} republicado\",\n  \"descripcion\": \"Creado desde la colección de Postman.\",\n  \"precio\": 185000,\n  \"moneda\": \"USD\",\n  \"ambientes\": 3,\n  \"dormitorios\": 2,\n  \"banos\": 1,\n  \"superficieM2\": 72.5,\n  \"direccion\": {\n    \"calle\": \"Gorriti\",\n    \"numero\": \"4850\",\n    \"piso\": \"7\",\n    \"unidad\": \"{{unidadBaja}}X\",\n    \"ciudad\": \"Ciudad Autónoma de Buenos Aires\",\n    \"provincia\": \"CABA\",\n    \"codigoPostal\": \"C1414\",\n    \"latitud\": -34.5889,\n    \"longitud\": -58.4305\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Libera la dirección sin dejar dos departamentos con la misma (ni siquiera uno dado de baja): al terminar la colección, todas las direcciones que creó son distintas."
           },
           "event": [
             {
@@ -1931,7 +1955,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 204', () => pm.response.to.have.status(204));"
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('en otra unidad', () => pm.expect(pm.response.json().direccion.unidad).to.eql(pm.collectionVariables.get('unidadBaja') + 'X'));"
                 ]
               }
             }
@@ -2084,7 +2109,12 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('responde 200', () => pm.response.to.have.status(200));",
-                  "pm.test('un resultado', () => pm.expect(pm.response.json().page.totalElements).to.eql(1));"
+                  "pm.test('los dos publicados, cada uno en su dirección', () => {",
+                  "    const content = pm.response.json().content;",
+                  "    pm.expect(content.map(d => d.id)).to.have.members([",
+                  "        Number(pm.collectionVariables.get('bajaId')), Number(pm.collectionVariables.get('ocupanteId'))]);",
+                  "    content.forEach(d => pm.expect(d.fechaBaja).to.eql(null));",
+                  "});"
                 ]
               }
             }
