@@ -29,7 +29,7 @@ class RequestIdFilterTest {
 
     @Test
     void reusesValidIncomingRequestId() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/departamentos");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/departamentos");
         request.addHeader(RequestContext.REQUEST_ID_HEADER, "req-123_abc.DEF:9");
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicReference<String> mdcDuringChain = new AtomicReference<>();
@@ -43,7 +43,7 @@ class RequestIdFilterTest {
 
     @Test
     void generatesRequestIdWhenMissing() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/departamentos");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/departamentos");
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicReference<String> mdcDuringChain = new AtomicReference<>();
 

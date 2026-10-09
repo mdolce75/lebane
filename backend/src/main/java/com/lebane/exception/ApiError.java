@@ -24,7 +24,7 @@ public record ApiError(
         String error,
         @Schema(description = "Mensaje apto para mostrar al usuario", example = "La solicitud contiene datos inválidos")
         String message,
-        @Schema(description = "Path del request (sin query string)", example = "/api/v1/departamentos")
+        @Schema(description = "Path del request (sin query string)", example = "/api/departamentos")
         String path,
         @Schema(description = "Correlation ID del request: permite encontrar el detalle en los logs",
                 example = "7f3c2a9e-req-42")

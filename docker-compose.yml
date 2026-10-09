@@ -89,7 +89,7 @@ services:
       STORAGE_CREATE_BUCKET: ${STORAGE_CREATE_BUCKET:-true}
       STORAGE_TIMEOUT: ${STORAGE_TIMEOUT:-10s}
       UPLOAD_MAX_FILE_SIZE: ${UPLOAD_MAX_FILE_SIZE:-5MB}
-      UPLOAD_MAX_REQUEST_SIZE: ${UPLOAD_MAX_REQUEST_SIZE:-6MB}
+      UPLOAD_MAX_REQUEST_SIZE: ${UPLOAD_MAX_REQUEST_SIZE:-26MB}
       # Proveedor de direcciones: stub (local) | external (API Georef)
       ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-stub}
       ADDRESS_PROVIDER_URL: ${ADDRESS_PROVIDER_URL:-https://apis.datos.gob.ar/georef/api}

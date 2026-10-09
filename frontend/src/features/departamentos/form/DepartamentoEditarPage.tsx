@@ -3,9 +3,13 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { isHttpError } from '../../../shared/api/errors';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { Spinner } from '../../../shared/components/Spinner';
-import { useActualizarDepartamento, useDepartamento } from '../api/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { departamentosKeys, useActualizarDepartamento, useDepartamento } from '../api/queries';
 import type { DepartamentoPayload } from '../api/schemas';
 import { ImagenesManager } from '../imagenes/ImagenesManager';
+import { MAX_IMAGES } from '../imagenes/imageValidation';
+import { uploadSequentially } from '../imagenes/uploadSequentially';
+import { useImageSelection } from '../imagenes/useImageSelection';
 import { NoEncontrado } from '../detalle/NoEncontrado';
 import { DepartamentoForm } from './DepartamentoForm';
 import { esModificable, estadosParaEdicion } from '../estadoReglas';
@@ -13,7 +17,8 @@ import { fromDetalle } from './departamentoSchema';
 
 /**
  * Edición con concurrencia optimista: se envía la versión leída (`If-Match`). Si otro usuario guardó cambios
- * mientras tanto (412), no se pisan: se avisa y se ofrece recargar los datos actuales.
+ * mientras tanto (412), no se pisan: se avisa y se ofrece recargar los datos actuales. Las fotos nuevas se suben al
+ * guardar, después de los datos; si alguna falla, se queda en la página para reintentarla.
  */
 export function DepartamentoEditarPage() {
   const id = Number(useParams().id);
@@ -21,6 +26,25 @@ export function DepartamentoEditarPage() {
   const { data, isPending, isError, error, refetch, isRefetching } = useDepartamento(id);
   const actualizar = useActualizarDepartamento(id);
   const [conflicto, setConflicto] = useState(false);
+  const queryClient = useQueryClient();
+  const seleccion = useImageSelection(MAX_IMAGES - (data?.imagenes.length ?? 0));
+  const [subiendo, setSubiendo] = useState(false);
+  const [fallidas, setFallidas] = useState(0);
+  const pendientes = seleccion.items.filter((i) => i.upload.status !== 'done').length;
+
+  const subirFotos = async (): Promise<number> => {
+    if (pendientes === 0) return 0;
+    setSubiendo(true);
+    try {
+      const errores = await uploadSequentially(id, seleccion.items, seleccion.setUpload);
+      setFallidas(errores);
+      await queryClient.invalidateQueries({ queryKey: departamentosKeys.all });
+      seleccion.removeUploaded();
+      return errores;
+    } finally {
+      setSubiendo(false);
+    }
+  };
 
   if (!Number.isInteger(id) || id <= 0) return <NoEncontrado />;
   if (isPending) return <Spinner label="Cargando departamento…" />;
@@ -33,6 +57,7 @@ export function DepartamentoEditarPage() {
     setConflicto(false);
     try {
       await actualizar.mutateAsync({ version: data.version, payload });
+      if ((await subirFotos()) > 0) return;
       navigate(`/departamentos/${id}`, { state: { aviso: 'Cambios guardados' } });
     } catch (e) {
       if (isHttpError(e) && (e.status === 412 || e.code === 'CONCURRENT_MODIFICATION')) {
@@ -84,21 +109,30 @@ export function DepartamentoEditarPage() {
         </div>
       )}
 
-      {!data.fechaBaja && esModificable(data.estado) && (
-        <>
-          {/* key: al recargar una versión nueva, el formulario se reinicia con esos datos. */}
-          <DepartamentoForm
-            key={data.version}
-            defaultValues={fromDetalle(data)}
-            estadosPermitidos={estadosParaEdicion(data.estado)}
-            submitLabel="Guardar cambios"
-            onSubmit={onSubmit}
-            onCancel={() => navigate(`/departamentos/${id}`)}
-            disabled={conflicto}
-          />
+      {fallidas > 0 && !subiendo && (
+        <div className="alert alert--warning" role="alert">
+          <strong>Los cambios se guardaron, pero {fallidas} foto(s) no se pudieron subir.</strong>
+          <p>Revisá el detalle de cada foto. Podés reintentar o volver al detalle sin ellas.</p>
+          <div className="alert__actions">
+            <button type="button" className="button" onClick={() => void subirFotos()}>Reintentar fotos fallidas</button>
+            <Link to={`/departamentos/${id}`} className="button button--ghost">Ir al departamento</Link>
+          </div>
+        </div>
+      )}
 
-          <ImagenesManager departamentoId={id} imagenes={data.imagenes} />
-        </>
+      {!data.fechaBaja && esModificable(data.estado) && (
+        // key: al recargar una versión nueva, el formulario se reinicia con esos datos.
+        <DepartamentoForm
+          key={data.version}
+          defaultValues={fromDetalle(data)}
+          estadosPermitidos={estadosParaEdicion(data.estado)}
+          submitLabel={pendientes > 0 ? `Guardar y subir ${pendientes} foto(s)` : 'Guardar cambios'}
+          onSubmit={onSubmit}
+          onCancel={() => navigate(`/departamentos/${id}`)}
+          disabled={conflicto || subiendo}
+        >
+          <ImagenesManager departamentoId={id} imagenes={data.imagenes} seleccion={seleccion} subiendo={subiendo} />
+        </DepartamentoForm>
       )}
     </section>
   );

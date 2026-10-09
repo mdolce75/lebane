@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 
-const API = '/api/v1/departamentos';
+const API = '/api/departamentos';
 
 /** PNG 1x1 válido: el backend valida la firma del archivo y el navegador tiene que poder dibujarlo. */
 export const PNG_1X1 = Buffer.from(
@@ -43,7 +43,7 @@ export async function crearDepartamento(
       ...overrides,
     },
   });
-  expect(response.status(), await response.text()).toBe(201);
+  expect(response.status(), await response.text()).toBe(202);
   return (await response.json()) as DepartamentoCreado;
 }
 

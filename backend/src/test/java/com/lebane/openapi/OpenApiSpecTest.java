@@ -79,13 +79,13 @@ class OpenApiSpecTest {
     void documentaTodosLosEndpointsDeLaApi() {
         assertThat(spec.path("openapi").asText()).startsWith("3.");
         assertThat(nombres(spec.path("paths"))).containsExactlyInAnyOrder(
-                "/api/v1/departamentos",
-                "/api/v1/departamentos/{id}",
-                "/api/v1/departamentos/{id}/consultas",
-                "/api/v1/departamentos/{id}/reactivacion",
-                "/api/v1/departamentos/{departamentoId}/imagenes",
-                "/api/v1/departamentos/{departamentoId}/imagenes/{imagenId}",
-                "/api/v1/direcciones/autocompletar");
+                "/api/departamentos",
+                "/api/departamentos/{id}",
+                "/api/departamentos/{id}/consultas",
+                "/api/departamentos/{id}/reactivacion",
+                "/api/departamentos/{departamentoId}/imagenes",
+                "/api/departamentos/{departamentoId}/imagenes/{imagenId}",
+                "/api/direcciones/autocompletar");
         // Actuator no es parte del contrato público.
         assertThat(nombres(spec.path("paths"))).noneMatch(path -> path.startsWith("/actuator"));
     }
@@ -161,13 +161,13 @@ class OpenApiSpecTest {
 
     @Test
     void elIdDeCorrelacionYLaConcurrenciaOptimistaEstanDocumentados() {
-        JsonNode editar = spec.path("paths").path("/api/v1/departamentos/{id}").path("put");
+        JsonNode editar = spec.path("paths").path("/api/departamentos/{id}").path("put");
         assertThat(nombresDeParametros(editar)).contains("If-Match", "X-Request-Id");
         assertThat(editar.path("responses").path("200").path("headers").has("ETag")).isTrue();
         assertThat(editar.path("responses").has("412")).isTrue();
 
-        JsonNode crear = spec.path("paths").path("/api/v1/departamentos").path("post");
-        assertThat(crear.path("responses").path("201").path("headers").has("Location")).isTrue();
+        JsonNode crear = spec.path("paths").path("/api/departamentos").path("post");
+        assertThat(crear.path("responses").path("202").path("headers").has("Location")).isTrue();
 
         operaciones().forEach((nombre, operacion) ->
                 assertThat(nombresDeParametros(operacion)).as(nombre).contains("X-Request-Id"));

@@ -6,6 +6,7 @@ import {
   crearDepartamento,
   darDeBajaDepartamento,
   eliminarImagen,
+  listarConsultas,
   listarDepartamentos,
   obtenerDepartamento,
   reactivarDepartamento,
@@ -18,6 +19,8 @@ export const departamentosKeys = {
   listas: () => [...departamentosKeys.all, 'lista'] as const,
   lista: (params: ListadoParams) => [...departamentosKeys.listas(), params] as const,
   detalle: (id: number) => [...departamentosKeys.all, 'detalle', id] as const,
+  /** Bajo la clave del detalle: al invalidarlo (consulta nueva, baja) también se recargan las consultas. */
+  consultas: (id: number, page: number) => [...departamentosKeys.detalle(id), 'consultas', page] as const,
 };
 
 /**
@@ -40,6 +43,16 @@ export function useDepartamento(id: number) {
   });
 }
 
+export const CONSULTAS_POR_PAGINA = 10;
+
+export function useConsultas(departamentoId: number, page: number) {
+  return useQuery({
+    queryKey: departamentosKeys.consultas(departamentoId, page),
+    queryFn: ({ signal }) => listarConsultas(departamentoId, page, CONSULTAS_POR_PAGINA, signal),
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** Tras cualquier cambio, el detalle se actualiza y los listados se invalidan (contadores, foto principal). */
 function useInvalidarDepartamento() {
   const queryClient = useQueryClient();
@@ -53,7 +66,8 @@ function useInvalidarDepartamento() {
 export function useCrearDepartamento() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: DepartamentoPayload) => crearDepartamento(payload),
+    mutationFn: ({ payload, imagenes }: { payload: DepartamentoPayload; imagenes: File[] }) =>
+      crearDepartamento(payload, imagenes),
     onSuccess: (creado) => {
       queryClient.setQueryData(departamentosKeys.detalle(creado.id), creado);
       return queryClient.invalidateQueries({ queryKey: departamentosKeys.listas() });

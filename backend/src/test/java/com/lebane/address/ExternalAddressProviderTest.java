@@ -68,7 +68,8 @@ class ExternalAddressProviderTest {
             assertThat(s.numero()).isEqualTo("4850");
             assertThat(s.ciudad()).isEqualTo("Ciudad Autónoma de Buenos Aires");
             assertThat(s.provincia()).isEqualTo("Ciudad Autónoma de Buenos Aires");
-            assertThat(s.latitud()).isEqualByComparingTo(new BigDecimal("-34.5903465757709"));
+            // Georef informa -34.5903465757709: se entrega con los 6 decimales que se guardan (~10 cm).
+            assertThat(s.latitud()).isEqualTo(new BigDecimal("-34.590347"));
             assertThat(s.placeId()).isEqualTo("georef:0209801005940:4850");
             assertThat(s.descripcion()).startsWith("AV. DEL LIBERTADOR 4850");
         });

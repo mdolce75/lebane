@@ -42,7 +42,7 @@ class ApiErrorControllerTest {
         assertThat(response.getBody()).satisfies(body -> {
             assertThat(body.error()).isEqualTo(code.name());
             assertThat(body.message()).isEqualTo(message);
-            assertThat(body.path()).isEqualTo("/api/v1/departamentos;x=1/1");
+            assertThat(body.path()).isEqualTo("/api/departamentos;x=1/1");
             assertThat(body.requestId()).isEqualTo("req-error-1");
             assertThat(body.fieldErrors()).isEmpty();
         });
@@ -75,7 +75,7 @@ class ApiErrorControllerTest {
     private static MockHttpServletRequest errorRequest(int status) {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/error");
         request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, status);
-        request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/api/v1/departamentos;x=1/1");
+        request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/api/departamentos;x=1/1");
         request.setAttribute(RequestContext.REQUEST_ID_ATTRIBUTE, "req-error-1");
         return request;
     }

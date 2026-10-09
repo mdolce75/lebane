@@ -27,7 +27,7 @@ export type AutocompleteResult = z.infer<typeof autocompleteSchema>;
 export const MIN_QUERY = 3;
 
 export async function autocompletarDireccion(q: string, signal?: AbortSignal): Promise<AutocompleteResult> {
-  const data = await http.get<unknown>('/v1/direcciones/autocompletar', { query: { q, limite: 5 }, signal });
+  const data = await http.get<unknown>('/direcciones/autocompletar', { query: { q, limite: 5 }, signal });
   return parseResponse(autocompleteSchema, data);
 }
 

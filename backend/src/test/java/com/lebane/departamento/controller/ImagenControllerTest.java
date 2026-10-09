@@ -43,7 +43,7 @@ import com.lebane.storage.TestImages;
 @EnableConfigurationProperties({ActuatorSecurityProperties.class, CorsProperties.class})
 class ImagenControllerTest {
 
-    private static final String BASE = "/api/v1/departamentos/7/imagenes";
+    private static final String BASE = "/api/departamentos/7/imagenes";
 
     @Autowired
     private MockMvc mockMvc;

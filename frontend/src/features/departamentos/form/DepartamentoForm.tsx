@@ -37,10 +37,16 @@ export function DepartamentoForm({
     handleSubmit,
     setValue,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<DepartamentoFormValues>({ resolver: zodResolver(departamentoFormSchema), defaultValues, mode: 'onTouched' });
   const [submitError, setSubmitError] = useState<unknown>(null);
   const bloqueado = disabled || isSubmitting;
+  // La dirección se elige con el autocompletado; los campos sueltos solo aparecen si se carga a mano (sin
+  // sugerencias, proveedor caído o una sugerencia sin altura). Una dirección existente se muestra como resumen.
+  const [modoDireccion, setModoDireccion] = useState<'buscar' | 'elegida' | 'manual'>(
+    defaultValues.direccion.calle ? 'elegida' : 'buscar',
+  );
 
   const completarDireccion = (s: SugerenciaDireccion) => {
     const opciones = { shouldValidate: true, shouldDirty: true } as const;
@@ -48,9 +54,21 @@ export function DepartamentoForm({
     setValue('direccion.numero', s.numero ?? '', opciones);
     setValue('direccion.ciudad', s.ciudad ?? '', opciones);
     setValue('direccion.provincia', s.provincia ?? '', opciones);
-    setValue('direccion.latitud', s.latitud?.toString() ?? '', opciones);
-    setValue('direccion.longitud', s.longitud?.toString() ?? '', opciones);
+    setValue('direccion.codigoPostal', '', opciones);
+    setValue('direccion.latitud', coordenada(s.latitud), opciones);
+    setValue('direccion.longitud', coordenada(s.longitud), opciones);
     setValue('direccion.placeId', s.placeId ?? '', opciones);
+    // Sin altura, ciudad o provincia la dirección no se puede guardar: se completa a mano lo que falte.
+    setModoDireccion(s.numero && s.ciudad && s.provincia ? 'elegida' : 'manual');
+  };
+
+  const cargarAMano = () => {
+    // Si se corrige a mano, las coordenadas y la referencia de la sugerencia ya no corresponden.
+    const opciones = { shouldDirty: true } as const;
+    setValue('direccion.latitud', '', opciones);
+    setValue('direccion.longitud', '', opciones);
+    setValue('direccion.placeId', '', opciones);
+    setModoDireccion('manual');
   };
 
   const enviar = handleSubmit(async (values) => {
@@ -65,6 +83,13 @@ export function DepartamentoForm({
 
   const e = errors;
   const d = errors.direccion;
+  const direccion = watch('direccion');
+  // En modo búsqueda o resumen los campos sueltos no se ven: sus errores (propios o del servidor) se muestran juntos.
+  const erroresDireccion = d
+    ? [d.calle, d.numero, d.ciudad, d.provincia, d.codigoPostal, d.latitud, d.longitud, d.placeId]
+        .map((error) => error?.message)
+        .filter((message): message is string => Boolean(message))
+    : [];
 
   return (
     <form className="form" noValidate onSubmit={enviar} aria-label="Datos del departamento">
@@ -114,35 +139,68 @@ export function DepartamentoForm({
 
       <fieldset className="form__section" disabled={bloqueado}>
         <legend>Dirección</legend>
-        <div className="form__wide">
-          <DireccionAutocomplete onSelect={completarDireccion} />
-        </div>
-        <FormField label="Calle" htmlFor="calle" error={d?.calle?.message} required>
-          <input id="calle" {...register('direccion.calle')} aria-invalid={Boolean(d?.calle)} />
-        </FormField>
-        <FormField label="Número" htmlFor="numero" error={d?.numero?.message} required>
-          <input id="numero" {...register('direccion.numero')} aria-invalid={Boolean(d?.numero)} />
-        </FormField>
+        {modoDireccion === 'buscar' && (
+          <div className="form__wide">
+            <DireccionAutocomplete onSelect={completarDireccion} />
+            {erroresDireccion.length > 0 && (
+              <p className="field__error" role="alert">Elegí una dirección de la lista o cargala a mano.</p>
+            )}
+            <button type="button" className="button button--link" onClick={cargarAMano}>
+              No encuentro la dirección: cargarla a mano
+            </button>
+          </div>
+        )}
+        {modoDireccion === 'elegida' && (
+          <div className="form__wide direccion-elegida">
+            <p className="direccion-elegida__texto">
+              <strong>{direccion.calle} {direccion.numero}</strong>
+              <br />
+              {direccion.ciudad}, {direccion.provincia}
+              {direccion.codigoPostal && ` (${direccion.codigoPostal})`}
+            </p>
+            {erroresDireccion.map((message) => (
+              <p key={message} className="field__error" role="alert">{message}</p>
+            ))}
+            <div className="direccion-elegida__acciones">
+              <button type="button" className="button button--ghost button--small" onClick={() => setModoDireccion('buscar')}>
+                Buscar otra dirección
+              </button>
+              <button type="button" className="button button--ghost button--small" onClick={cargarAMano}>
+                Corregir a mano
+              </button>
+            </div>
+          </div>
+        )}
+        {modoDireccion === 'manual' && (
+          <>
+            <div className="form__wide">
+              <button type="button" className="button button--link" onClick={() => setModoDireccion('buscar')}>
+                Buscar la dirección con el autocompletado
+              </button>
+            </div>
+            <FormField label="Calle" htmlFor="calle" error={d?.calle?.message} required>
+              <input id="calle" {...register('direccion.calle')} aria-invalid={Boolean(d?.calle)} />
+            </FormField>
+            <FormField label="Número" htmlFor="numero" error={d?.numero?.message} required>
+              <input id="numero" {...register('direccion.numero')} aria-invalid={Boolean(d?.numero)} />
+            </FormField>
+            <FormField label="Ciudad" htmlFor="ciudad" error={d?.ciudad?.message} required>
+              <input id="ciudad" {...register('direccion.ciudad')} aria-invalid={Boolean(d?.ciudad)} />
+            </FormField>
+            <FormField label="Provincia" htmlFor="provincia" error={d?.provincia?.message} required>
+              <input id="provincia" {...register('direccion.provincia')} aria-invalid={Boolean(d?.provincia)} />
+            </FormField>
+            <FormField label="Código postal" htmlFor="codigoPostal" error={d?.codigoPostal?.message}>
+              <input id="codigoPostal" {...register('direccion.codigoPostal')} />
+            </FormField>
+          </>
+        )}
+        {/* El autocompletado no trae piso ni unidad: siempre se completan acá. */}
         <FormField label="Piso" htmlFor="piso" error={d?.piso?.message}>
           <input id="piso" {...register('direccion.piso')} />
         </FormField>
         <FormField label="Unidad" htmlFor="unidad" error={d?.unidad?.message}>
           <input id="unidad" {...register('direccion.unidad')} />
-        </FormField>
-        <FormField label="Ciudad" htmlFor="ciudad" error={d?.ciudad?.message} required>
-          <input id="ciudad" {...register('direccion.ciudad')} aria-invalid={Boolean(d?.ciudad)} />
-        </FormField>
-        <FormField label="Provincia" htmlFor="provincia" error={d?.provincia?.message} required>
-          <input id="provincia" {...register('direccion.provincia')} aria-invalid={Boolean(d?.provincia)} />
-        </FormField>
-        <FormField label="Código postal" htmlFor="codigoPostal" error={d?.codigoPostal?.message}>
-          <input id="codigoPostal" {...register('direccion.codigoPostal')} />
-        </FormField>
-        <FormField label="Latitud" htmlFor="latitud" error={d?.latitud?.message}>
-          <input id="latitud" inputMode="decimal" {...register('direccion.latitud')} />
-        </FormField>
-        <FormField label="Longitud" htmlFor="longitud" error={d?.longitud?.message}>
-          <input id="longitud" inputMode="decimal" {...register('direccion.longitud')} />
         </FormField>
       </fieldset>
 
@@ -162,4 +220,9 @@ export function DepartamentoForm({
       </div>
     </form>
   );
+}
+
+/** Las sugerencias pueden traer más decimales de los que se guardan: se redondean a 6 (~10 cm). */
+function coordenada(valor: number | null): string {
+  return valor === null ? '' : String(Number(valor.toFixed(6)));
 }

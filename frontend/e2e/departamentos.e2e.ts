@@ -2,7 +2,7 @@ import { expect, test, type Request } from '@playwright/test';
 import { crearDepartamento, marca, obtenerDepartamento, PNG_1X1, unidadUnica } from './support';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const esListado = (r: Request) => new URL(r.url()).pathname === '/api/v1/departamentos' && r.method() === 'GET';
+const esListado = (r: Request) => new URL(r.url()).pathname === '/api/departamentos' && r.method() === 'GET';
 
 // nginx envía una Content-Security-Policy estricta: cualquier recurso bloqueado (p. ej. las fotos de MinIO o las
 // vistas previas blob:) aparece como error en la consola y hace fallar el test.
@@ -75,6 +75,7 @@ test.describe('Alta', () => {
     await page.getByLabel(/^Ambientes/).fill('3');
     await page.getByLabel(/^Dormitorios/).fill('2');
     await page.getByLabel(/^Superficie/).fill('70');
+    await page.getByRole('button', { name: /cargarla a mano/ }).click();
     await page.getByLabel(/^Calle/).fill('Gorriti');
     await page.getByLabel(/^Número/).fill('4850');
     await page.getByLabel(/^Unidad/).fill(unidadUnica());
@@ -83,9 +84,10 @@ test.describe('Alta', () => {
     await page.getByLabel('Agregar fotos').setInputFiles({ name: 'frente.png', mimeType: 'image/png', buffer: PNG_1X1 });
     await expect(page.getByRole('img', { name: 'Vista previa de frente.png' })).toBeVisible();
 
-    const subida = page.waitForResponse((r) => /\/imagenes$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST');
+    // Datos y fotos viajan en un solo POST multipart, como pide el contrato.
+    const alta = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/departamentos' && r.request().method() === 'POST');
     await page.getByRole('button', { name: 'Crear y subir 1 foto(s)' }).click();
-    expect((await subida).status()).toBe(201);
+    expect((await alta).status()).toBe(202);
 
     await expect(page.getByRole('heading', { level: 1, name: titulo })).toBeVisible();
     await expect(page.getByText('Departamento creado.')).toBeVisible();
@@ -108,7 +110,7 @@ test.describe('Alta', () => {
 
     // El backend aplica la misma regla aunque se saltee el navegador.
     const { id } = await crearDepartamento(request);
-    const response = await request.post(`/api/v1/departamentos/${id}/imagenes`, {
+    const response = await request.post(`/api/departamentos/${id}/imagenes`, {
       multipart: { archivo: { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('<html>no soy una foto</html>') } },
     });
     expect(response.status()).toBe(400);
@@ -132,6 +134,10 @@ test.describe('Detalle', () => {
     await form.getByLabel(/^Mensaje/).fill('¿Se puede visitar el sábado?');
     await form.getByRole('button', { name: 'Enviar consulta' }).click();
     await expect(page.getByText(/Consulta enviada/)).toBeVisible();
+    // Se ve en las consultas recibidas del departamento, con los datos de contacto.
+    const recibidas = page.getByRole('region', { name: 'Consultas recibidas' });
+    await expect(recibidas).toContainText('¿Se puede visitar el sábado?');
+    await expect(recibidas.getByRole('link', { name: 'ana@example.com' })).toBeVisible();
 
     await page.goto(`/departamentos?q=${encodeURIComponent(titulo.split(' ')[0]!)}`);
     await expect(page.getByRole('article', { name: titulo })).toContainText('1 consulta');
@@ -158,7 +164,7 @@ test.describe('Edición', () => {
     const actual = await obtenerDepartamento(request, id);
     const deOtro = `${titulo} (editado por otro)`;
     const campos = ['descripcion', 'precio', 'moneda', 'ambientes', 'dormitorios', 'banos', 'superficieM2', 'estado', 'direccion'];
-    const put = await request.put(`/api/v1/departamentos/${id}`, {
+    const put = await request.put(`/api/departamentos/${id}`, {
       headers: { 'If-Match': actual.etag },
       data: { ...Object.fromEntries(campos.map((c) => [c, actual.body[c]])), titulo: deOtro },
     });
@@ -192,7 +198,7 @@ test.describe('Baja y reactivación', () => {
 
     await expect(page).toHaveURL(/\/departamentos$/);
     await expect(page.getByText(/dado de baja\./)).toBeVisible();
-    const baja = await request.get(`/api/v1/departamentos/${id}`);
+    const baja = await request.get(`/api/departamentos/${id}`);
     expect(baja.status()).toBe(200);
     expect((await baja.json()).fechaBaja).not.toBeNull();
 

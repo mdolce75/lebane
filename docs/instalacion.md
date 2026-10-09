@@ -52,7 +52,7 @@ Toda la configuración proviene de variables de entorno. `cp .env.example .env` 
 | `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` | — (en Docker: `MINIO_ROOT_*`) | Credenciales de MinIO; nunca se registran. |
 | `STORAGE_REGION` / `STORAGE_CREATE_BUCKET` | `us-east-1` / `true` | Región; crear el bucket con lectura pública si no existe. |
 | `STORAGE_TIMEOUT` / `STORAGE_CONNECT_TIMEOUT` | `10s` / `2s` | Tiempo máximo por operación (TimeLimiter) y de conexión. |
-| `UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE` | `5MB` / `6MB` | Tamaño máximo por foto y por request (una foto por request). |
+| `UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE` | `5MB` / `26MB` | Tamaño máximo por foto y por request (el alta admite hasta 5 fotos en el mismo request). |
 | `SEED_ENABLED` | `false` (`.env.example`: `true`) | Carga datos de ejemplo idempotentes al arrancar. |
 | `FLYWAY_ENABLED` | `true` | Aplica las migraciones al arrancar. |
 | `ADDRESS_PROVIDER` | `stub` | `stub` (catálogo de ejemplo sin red, con pocas calles: Gorriti, Av. Santa Fe, Bv. Oroño, ...) o `external` (cualquier dirección real de Argentina con la API pública Georef, sin API key). |
@@ -174,8 +174,11 @@ Consultas útiles en Kibana (KQL):
 
 ## Seed de datos
 
-Con `SEED_ENABLED=true` (valor de `.env.example`; el default de la aplicación es `false`), al arrancar se cargan 12
-departamentos ficticios en distintas ciudades y estados, con consultas de ejemplo.
+Con `SEED_ENABLED=true` (valor de `.env.example`; el default de la aplicación es `false`), al arrancar se cargan 500
+departamentos ficticios en distintas ciudades y estados, con fotos y consultas de ejemplo. Los 12 primeros están
+escritos a mano (`SeedData`); el resto los genera `SeedGenerado` de forma determinística, variando ciudad, barrio,
+ambientes, superficie, precio, moneda y estado para que los filtros y el orden del listado tengan con qué trabajar.
+Ninguna dirección se repite.
 
 - **Idempotente**: cada departamento tiene un código fijo (`SEED-0001`…); si ya existe no se toca. Reiniciar no
   duplica datos ni pisa ediciones manuales.

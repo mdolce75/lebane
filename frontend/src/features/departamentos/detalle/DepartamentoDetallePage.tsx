@@ -8,6 +8,7 @@ import { useDepartamento } from '../api/queries';
 import { BajaDepartamento } from './BajaDepartamento';
 import { ReactivarDepartamento } from './ReactivarDepartamento';
 import { ConsultaForm } from '../consultas/ConsultaForm';
+import { ConsultasRecibidas } from '../consultas/ConsultasRecibidas';
 import { EstadoBadge } from '../EstadoBadge';
 import { esModificable } from '../estadoReglas';
 import { Galeria } from './Galeria';
@@ -113,6 +114,11 @@ export function DepartamentoDetallePage() {
           <ConsultaForm departamentoId={d.id} disponible={d.estado !== 'VENDIDO'} />
         </section>
       )}
+
+      <section aria-labelledby="consultas-recibidas-titulo">
+        <h2 id="consultas-recibidas-titulo">Consultas recibidas</h2>
+        <ConsultasRecibidas departamentoId={d.id} />
+      </section>
 
       <p className="muted detail__meta">
         Publicado el {formatDateTime(d.createdAt)} · Actualizado el {formatDateTime(d.updatedAt)} ·{' '}

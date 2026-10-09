@@ -57,6 +57,7 @@ export function detalle(overrides: Partial<DepartamentoDetalle> = {}): Departame
       { id: 11, url: 'http://localhost:9000/lebane-images/departamentos/1/b.png', contentType: 'image/png', sizeBytes: 1000, posicion: 1 },
     ],
     cantidadConsultas: 3,
+    consultas: [],
     version: 3,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T13:00:00Z',

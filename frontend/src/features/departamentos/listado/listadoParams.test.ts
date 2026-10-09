@@ -4,7 +4,7 @@ import { DEFAULT_SIZE, DEFAULT_SORT, maxPage, parseListadoParams, toSearchParams
 
 const parse = (query: string) => parseListadoParams(new URLSearchParams(query));
 
-const vacioForm = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', ambientesMin: '', conImagenes: '', dadosDeBaja: false } as const;
+const vacioForm = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', superficieMin: '', superficieMax: '', ambientesMin: '', conImagenes: '', dadosDeBaja: false } as const;
 
 describe('parseListadoParams', () => {
   it('usa defaults sin parámetros', () => {
@@ -54,7 +54,7 @@ describe('parseListadoParams', () => {
 });
 
 describe('filtrosSchema', () => {
-  const vacio = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', ambientesMin: '', conImagenes: '', dadosDeBaja: false } as const;
+  const vacio = { q: '', ciudad: '', estado: [], moneda: '', precioMin: '', precioMax: '', superficieMin: '', superficieMax: '', ambientesMin: '', conImagenes: '', dadosDeBaja: false } as const;
 
   it('acepta el formulario vacío y lo convierte en "sin filtros"', () => {
     const form = filtrosSchema.parse(vacio);
@@ -76,5 +76,19 @@ describe('filtrosSchema', () => {
   it('acepta decimales con coma', () => {
     const form = filtrosSchema.parse({ ...vacio, moneda: 'ARS', precioMin: '1500,50' });
     expect(paramsFromFiltros(form).precioMin).toBe(1500.5);
+  });
+
+  it('filtra por superficie mínima y máxima, y rechaza un rango invertido', () => {
+    const form = filtrosSchema.parse({ ...vacio, superficieMin: '40', superficieMax: '80,5' });
+    expect(paramsFromFiltros(form)).toMatchObject({ superficieMin: 40, superficieMax: 80.5 });
+    const invertido = filtrosSchema.safeParse({ ...vacio, superficieMin: '90', superficieMax: '50' });
+    expect(invertido.error?.issues[0]?.path).toEqual(['superficieMax']);
+  });
+
+  it('lleva la superficie a la URL y la lee de vuelta', () => {
+    const search = toSearchParams({ superficieMin: 40, superficieMax: 80 });
+    expect(search.toString()).toBe('superficieMin=40&superficieMax=80');
+    expect(parseListadoParams(search)).toMatchObject({ superficieMin: 40, superficieMax: 80 });
+    expect(parseListadoParams(new URLSearchParams('superficieMin=90&superficieMax=50')).superficieMax).toBeUndefined();
   });
 });

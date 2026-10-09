@@ -65,7 +65,7 @@ departamento 1 ──── 0..N consulta    (FK consulta.departamento_id, @Many
 |---|---|---|
 | `departamento` | código comercial único (`DEP-XXXXXXXX`), título, descripción, precio + moneda (`ARS`/`USD`), ambientes, dormitorios, baños, superficie, estado (`DISPONIBLE`/`RESERVADO`/`VENDIDO`), dirección embebida (calle, número, piso, unidad, ciudad, provincia, CP, lat/long, placeId), `version`, `created_at`, `updated_at` | `UNIQUE(codigo)`; `CHECK` de precio > 0, rangos, `dormitorios < ambientes`, enums, coordenadas completas y en rango |
 | `imagen` | metadatos de la foto (`object_key`, `content_type`, `size_bytes`, `posicion`); el binario vive en MinIO | `UNIQUE(object_key)`; `posicion` 0..4 + `UNIQUE(departamento_id, posicion)` ⇒ **máximo 5 fotos garantizado por la base** |
-| `consulta` | nombre, email, teléfono, mensaje, `created_at` (datos personales: nunca en logs ni respuestas) | FK + índice `ix_consulta_departamento` |
+| `consulta` | nombre, email, teléfono, mensaje, `created_at` (datos personales: nunca en logs; solo los devuelve el listado de consultas del departamento) | FK + índice `ix_consulta_departamento_fecha` (conteo y listado paginado) |
 
 - **Esquema versionado con Flyway** (`db/migration`); Hibernate solo valida (`ddl-auto=validate`): si una entidad
   no coincide con la tabla, la aplicación no arranca.
@@ -87,13 +87,14 @@ departamento 1 ──── 0..N consulta    (FK consulta.departamento_id, @Many
 ## Imágenes y MinIO
 
 ```bash
-# Subir (una foto por request; el tipo se detecta por el contenido, no por el nombre)
-curl -i -F "archivo=@casa.jpg" http://localhost:8080/api/v1/departamentos/1/imagenes
+# Agregar una foto a un departamento existente (en el alta van en el mismo POST multipart; el tipo se detecta
+# por el contenido, no por el nombre)
+curl -i -F "archivo=@casa.jpg" http://localhost:8080/api/departamentos/1/imagenes
 # HTTP/1.1 201
 # {"id":19,"url":"http://localhost:9000/lebane-images/departamentos/1/80d7…png","contentType":"image/png",
 #  "sizeBytes":8600,"posicion":0}
 
-curl -i -X DELETE http://localhost:8080/api/v1/departamentos/1/imagenes/19      # 204
+curl -i -X DELETE http://localhost:8080/api/departamentos/1/imagenes/19      # 204
 ```
 
 | Regla | Detalle |
@@ -131,7 +132,7 @@ transitorio, ERROR si es de configuración), `Storage compensating delete execut
 ## Autocompletado de direcciones
 
 ```bash
-curl 'http://localhost:8080/api/v1/direcciones/autocompletar?q=Av%20Santa%20Fe%201860&limite=2'
+curl 'http://localhost:8080/api/direcciones/autocompletar?q=Av%20Santa%20Fe%201860&limite=2'
 ```
 
 ```json
@@ -207,10 +208,10 @@ Panel en `http://localhost:3000` (Docker) o `http://localhost:5173` (`npm run de
 
 | Pantalla | Ruta | Qué hace |
 |---|---|---|
-| Listado | `/departamentos` (`/` redirige) | Tarjetas con foto principal, precio, ubicación, características y contadores. Filtros (texto, ciudad, estado, moneda + precio, ambientes, con/sin fotos), orden y tamaño de página |
+| Listado | `/departamentos` (`/` redirige) | Tarjetas con foto principal, precio, ubicación, características y contadores. Filtros (texto, ciudad, estado, moneda + precio, superficie mínima y máxima, ambientes, con/sin fotos), orden y tamaño de página |
 | Alta | `/departamentos/nuevo` | Formulario validado, autocompletado de dirección y hasta 5 fotos con vista previa |
-| Detalle | `/departamentos/:id` | Galería, datos completos, mapa (si hay coordenadas) y formulario de consulta |
-| Edición | `/departamentos/:id/editar` | Mismo formulario con concurrencia optimista y gestión de fotos (eliminar / subir) |
+| Detalle | `/departamentos/:id` | Galería, datos completos, mapa (si hay coordenadas), formulario de consulta y consultas recibidas (paginadas, con los datos de contacto) |
+| Edición | `/departamentos/:id/editar` | Mismo formulario con concurrencia optimista y gestión de fotos (eliminar / subir) antes de Guardar |
 
 **Listado**
 - **Paginación, filtros y orden en el servidor**: cada cambio es un request; el cliente nunca filtra ni pagina
@@ -227,10 +228,16 @@ Panel en `http://localhost:3000` (Docker) o `http://localhost:5173` (`npm run de
 
 **Alta y edición**
 - React Hook Form + Zod con **las mismas reglas que el backend** (incluidas las que cruzan campos: dormitorios <
-  ambientes, coordenadas completas, moneda obligatoria para filtrar precio). Los `fieldErrors` de un 400 del
+  ambientes, coordenadas completas). En los filtros del listado la pantalla pide elegir la moneda para filtrar por
+  precio, para que el usuario sepa en qué moneda está el rango (la API, si falta, asume `USD`). Los `fieldErrors` de un 400 del
   servidor se muestran en el campo correspondiente porque los nombres coinciden (`direccion.ciudad`).
-- **Autocompletado de dirección** con *debounce* (300 ms, mínimo 3 caracteres): completa calle, número, ciudad,
-  provincia y coordenadas, que siguen siendo editables. Si el proveedor está degradado, avisa que se cargue a mano.
+- **Dirección con autocompletado** (*debounce* de 300 ms, mínimo 3 caracteres): el buscador es el único campo de
+  dirección; al elegir una sugerencia se muestra como resumen (calle y altura, ciudad, provincia) y se completan
+  las coordenadas, redondeadas a 6 decimales. Piso y unidad se cargan aparte porque el proveedor no los trae.
+  Los campos sueltos aparecen solo para cargarla a mano: si no hay sugerencias, si el proveedor está degradado o si
+  la sugerencia no trae altura.
+- **Orden del formulario**: datos, dirección, fotos y recién al final Guardar y Cancelar, en el alta y en la
+  edición. En la edición, quitar una foto actual es inmediato (con confirmación) y las nuevas se suben al guardar.
 - **Fotos**: tipo validado por **contenido** (firma JPEG/PNG/WebP, igual que el backend), máximo 5 MB y 5 fotos
   (contando las ya cargadas); vista previa con object URLs liberadas al quitar o salir; quitar antes de enviar.
 - **Subida con errores parciales**: el departamento se crea y las fotos se suben de a una, cada una con su estado

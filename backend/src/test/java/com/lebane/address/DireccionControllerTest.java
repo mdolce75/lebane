@@ -31,7 +31,7 @@ import com.lebane.config.SecurityConfig;
 @EnableConfigurationProperties({ActuatorSecurityProperties.class, CorsProperties.class})
 class DireccionControllerTest {
 
-    private static final String URL = "/api/v1/direcciones/autocompletar";
+    private static final String URL = "/api/direcciones/autocompletar";
 
     @Autowired
     private MockMvc mockMvc;

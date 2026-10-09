@@ -3,12 +3,15 @@ package com.lebane.departamento.mapper;
 import static com.lebane.departamento.mapper.Textos.opcional;
 import static com.lebane.departamento.mapper.Textos.requerido;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
+import com.lebane.departamento.dto.ConsultaResponse;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
 import com.lebane.departamento.dto.DepartamentoListItemResponse;
 import com.lebane.departamento.dto.DepartamentoListadoParams;
@@ -51,7 +54,7 @@ public class DepartamentoMapper {
     }
 
     public DepartamentoDetailResponse toDetail(Departamento departamento, List<Imagen> imagenes,
-            long cantidadConsultas) {
+            List<ConsultaResponse> consultas) {
         return new DepartamentoDetailResponse(
                 departamento.getId(),
                 departamento.getCodigo(),
@@ -66,7 +69,8 @@ public class DepartamentoMapper {
                 departamento.getEstado(),
                 toResponse(departamento.getDireccion()),
                 imagenes.stream().map(this::toResponse).toList(),
-                cantidadConsultas,
+                consultas.size(),
+                consultas,
                 departamento.getVersion(),
                 departamento.getCreatedAt(),
                 departamento.getUpdatedAt(),
@@ -87,7 +91,13 @@ public class DepartamentoMapper {
 
     /** Parámetros web (ya validados y normalizados) → criterios del repositorio. */
     public DepartamentoFiltro toFiltro(DepartamentoListadoParams params) {
-        Set<EstadoDepartamento> estados = params.estado().isEmpty() ? Set.of() : EnumSet.copyOf(params.estado());
+        Set<EstadoDepartamento> estados;
+        if (params.disponible() != null) {
+            estados = params.disponible() ? EnumSet.of(EstadoDepartamento.DISPONIBLE)
+                    : EnumSet.complementOf(EnumSet.of(EstadoDepartamento.DISPONIBLE));
+        } else {
+            estados = params.estado().isEmpty() ? Set.of() : EnumSet.copyOf(params.estado());
+        }
         return new DepartamentoFiltro(params.q(), params.ciudad(), estados, params.moneda(), params.precioMin(),
                 params.precioMax(), params.ambientesMin(), params.dormitoriosMin(), params.banosMin(),
                 params.superficieMin(), params.superficieMax(), params.conImagenes(),
@@ -122,9 +132,14 @@ public class DepartamentoMapper {
                 requerido(request.ciudad()),
                 requerido(request.provincia()),
                 opcional(request.codigoPostal()),
-                request.latitud(),
-                request.longitud(),
+                coordenada(request.latitud()),
+                coordenada(request.longitud()),
                 opcional(request.placeId()));
+    }
+
+    /** Redondeada a la escala de la columna; un proveedor puede enviar más decimales. */
+    static BigDecimal coordenada(BigDecimal valor) {
+        return valor == null ? null : valor.setScale(DireccionRequest.ESCALA_COORDENADA, RoundingMode.HALF_UP);
     }
 
     private static DireccionResponse toResponse(Direccion direccion) {

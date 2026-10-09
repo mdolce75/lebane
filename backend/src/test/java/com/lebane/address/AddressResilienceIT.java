@@ -40,7 +40,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 @ExtendWith(OutputCaptureExtension.class)
 class AddressResilienceIT {
 
-    private static final String URL = "/api/v1/direcciones/autocompletar";
+    private static final String URL = "/api/direcciones/autocompletar";
     private static final String TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
     private static final FakeGeorefServer GEOREF = startServer();
 

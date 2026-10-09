@@ -23,6 +23,8 @@ export const filtrosSchema = z
     moneda: z.union([z.enum(monedas), z.literal('')]),
     precioMin: numeroOpcional,
     precioMax: numeroOpcional,
+    superficieMin: numeroOpcional,
+    superficieMax: numeroOpcional,
     ambientesMin: z.union([z.literal(''), z.string().regex(/^([1-9]|1\d|20)$/, 'Entre 1 y 20')]),
     conImagenes: z.enum(['', 'true', 'false']),
     dadosDeBaja: z.boolean(),
@@ -35,6 +37,11 @@ export const filtrosSchema = z
     const max = toNumber(value.precioMax);
     if (min !== undefined && max !== undefined && min > max) {
       ctx.addIssue({ code: 'custom', path: ['precioMax'], message: 'Debe ser mayor o igual al mínimo' });
+    }
+    const supMin = toNumber(value.superficieMin);
+    const supMax = toNumber(value.superficieMax);
+    if (supMin !== undefined && supMax !== undefined && supMin > supMax) {
+      ctx.addIssue({ code: 'custom', path: ['superficieMax'], message: 'Debe ser mayor o igual al mínimo' });
     }
   });
 
@@ -52,6 +59,8 @@ export function filtrosFromParams(params: ListadoParams): FiltrosForm {
     moneda: params.moneda ?? '',
     precioMin: params.precioMin?.toString() ?? '',
     precioMax: params.precioMax?.toString() ?? '',
+    superficieMin: params.superficieMin?.toString() ?? '',
+    superficieMax: params.superficieMax?.toString() ?? '',
     ambientesMin: params.ambientesMin?.toString() ?? '',
     conImagenes: params.conImagenes === undefined ? '' : String(params.conImagenes) as 'true' | 'false',
     dadosDeBaja: params.dadosDeBaja === true,
@@ -67,6 +76,8 @@ export function paramsFromFiltros(form: FiltrosForm): Partial<ListadoParams> {
     moneda: form.moneda || undefined,
     precioMin: toNumber(form.precioMin),
     precioMax: toNumber(form.precioMax),
+    superficieMin: toNumber(form.superficieMin),
+    superficieMax: toNumber(form.superficieMax),
     ambientesMin: form.ambientesMin ? Number(form.ambientesMin) : undefined,
     conImagenes: form.conImagenes === '' ? undefined : form.conImagenes === 'true',
     dadosDeBaja: form.dadosDeBaja ? true : undefined,

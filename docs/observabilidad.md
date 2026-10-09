@@ -73,10 +73,10 @@ deprecado y Spring Boot imprime ese aviso en stdout como texto plano, lo que rom
 Ejemplo de access log:
 
 ```json
-{"@timestamp":"2026-10-01T12:00:00.123-03:00","message":"HTTP GET /api/v1/departamentos -> 200 in 12 ms",
+{"@timestamp":"2026-10-01T12:00:00.123-03:00","message":"HTTP GET /api/departamentos -> 200 in 12 ms",
  "logger":"com.lebane.access","thread":"tomcat-handler-3","level":"INFO",
  "requestId":"3f0c…","traceId":"6512…","spanId":"9a1b…",
- "method":"GET","path":"/api/v1/departamentos","status":200,"durationMs":12,
+ "method":"GET","path":"/api/departamentos","status":200,"durationMs":12,
  "remoteAddress":"172.18.0.5","responseSize":null,
  "service":"lebane-backend","application":"lebane-backend","environment":"local"}
 ```

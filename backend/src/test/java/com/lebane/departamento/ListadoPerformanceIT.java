@@ -283,7 +283,7 @@ class ListadoPerformanceIT {
         }
 
         DepartamentoListadoParams build() {
-            return new DepartamentoListadoParams(q, ciudad, estado, moneda, precioMin, precioMax, ambientesMin, null,
+            return new DepartamentoListadoParams(q, ciudad, estado, null, moneda, precioMin, precioMax, ambientesMin, null,
                     null, null, null, conImagenes, dadosDeBaja, page, size, sort);
         }
     }

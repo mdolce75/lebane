@@ -1,37 +1,27 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { ImageWithFallback } from '../../../shared/components/ImageWithFallback';
-import { departamentosKeys, useEliminarImagen } from '../api/queries';
+import { useEliminarImagen } from '../api/queries';
 import type { Imagen } from '../api/schemas';
 import { ImagePicker } from './ImagePicker';
 import { MAX_IMAGES } from './imageValidation';
-import { uploadSequentially } from './uploadSequentially';
-import { useImageSelection } from './useImageSelection';
+import type { useImageSelection } from './useImageSelection';
 
-type Props = { departamentoId: number; imagenes: Imagen[] };
+type Props = {
+  departamentoId: number;
+  imagenes: Imagen[];
+  /** Fotos nuevas elegidas: se suben al guardar el formulario, como en el alta. */
+  seleccion: ReturnType<typeof useImageSelection>;
+  subiendo: boolean;
+};
 
 /**
- * Fotos de un departamento existente: quitar las actuales y subir nuevas hasta completar 5. Cada operación
- * impacta de inmediato en el servidor (no depende de guardar el formulario).
+ * Fotos de un departamento existente, dentro del formulario de edición (antes de Guardar y Cancelar). Quitar una
+ * foto actual impacta de inmediato (pide confirmación); las nuevas se suben al guardar.
  */
-export function ImagenesManager({ departamentoId, imagenes }: Props) {
-  const queryClient = useQueryClient();
+export function ImagenesManager({ departamentoId, imagenes, seleccion, subiendo }: Props) {
   const eliminar = useEliminarImagen(departamentoId);
-  const seleccion = useImageSelection(MAX_IMAGES - imagenes.length);
-  const [subiendo, setSubiendo] = useState(false);
   const [eliminando, setEliminando] = useState<number | null>(null);
-
-  const subir = async () => {
-    setSubiendo(true);
-    try {
-      const fallidas = await uploadSequentially(departamentoId, seleccion.items, seleccion.setUpload);
-      await queryClient.invalidateQueries({ queryKey: departamentosKeys.all });
-      if (fallidas === 0) seleccion.removeUploaded();
-    } finally {
-      setSubiendo(false);
-    }
-  };
 
   const quitar = async (imagen: Imagen) => {
     if (!window.confirm('¿Eliminar esta foto? Esta acción no se puede deshacer.')) return;
@@ -43,11 +33,9 @@ export function ImagenesManager({ departamentoId, imagenes }: Props) {
     }
   };
 
-  const pendientes = seleccion.items.filter((i) => i.upload.status !== 'done').length;
-
   return (
-    <section className="form__section form__section--full" aria-labelledby="fotos-titulo">
-      <h2 id="fotos-titulo">Fotos ({imagenes.length} de {MAX_IMAGES})</h2>
+    <fieldset className="form__section form__section--full">
+      <legend>Fotos ({imagenes.length} de {MAX_IMAGES})</legend>
       {imagenes.length > 0 ? (
         <ul className="thumbs" aria-label="Fotos actuales">
           {imagenes.map((imagen, index) => (
@@ -56,7 +44,7 @@ export function ImagenesManager({ departamentoId, imagenes }: Props) {
               <div className="thumb__info">
                 <span>{index === 0 ? 'Principal' : `Foto ${index + 1}`}</span>
               </div>
-              <button type="button" className="button button--ghost button--small" disabled={eliminando !== null}
+              <button type="button" className="button button--ghost button--small" disabled={eliminando !== null || subiendo}
                 onClick={() => quitar(imagen)} aria-label={`Eliminar foto ${index + 1}`}>
                 {eliminando === imagen.id ? 'Eliminando…' : 'Eliminar'}
               </button>
@@ -77,11 +65,7 @@ export function ImagenesManager({ departamentoId, imagenes }: Props) {
         onRemove={seleccion.remove}
         disabled={subiendo}
       />
-      {pendientes > 0 && (
-        <button type="button" className="button" onClick={subir} disabled={subiendo}>
-          {subiendo ? 'Subiendo…' : `Subir ${pendientes} foto(s)`}
-        </button>
-      )}
-    </section>
+      {subiendo && <p className="muted" role="status">Subiendo fotos…</p>}
+    </fieldset>
   );
 }

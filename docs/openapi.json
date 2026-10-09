@@ -1,7 +1,7 @@
 {
   "openapi" : "3.1.0",
   "info" : {
-    "description" : "API REST de Lebane para gestionar departamentos en venta: alta, edición, listado con filtros, fotos y consultas de interesados.\n\n**Convenciones**\n\n- **Errores**: toda respuesta 4xx/5xx tiene el mismo esquema `ApiError`, con un código estable en `error`, un mensaje apto para mostrar al usuario y el `requestId` para soporte. Nunca incluye stack traces, SQL ni detalles de infraestructura. Los errores de validación detallan cada campo en `fieldErrors` (las claves son las rutas del body o los nombres de los parámetros, p. ej. `direccion.ciudad`).\n- **Correlation ID**: cada request puede enviar `X-Request-Id`; si no lo envía o no es válido, el backend genera uno. La respuesta siempre lo devuelve y queda en todos los logs del request.\n- **Concurrencia optimista**: el detalle, el alta y la edición devuelven `ETag` con la versión del departamento. Enviarlo en `If-Match` al editar evita pisar cambios de otro usuario (412 si cambió).\n- **Paginación**: `page` (desde 0) y `size` (1 a 100), con una ventana máxima de 10.000 resultados por búsqueda. La respuesta usa el formato estándar de Spring Data (`content` + `page`).\n- **Disponibilidad**: si una dependencia no crítica falla (storage de imágenes, proveedor de direcciones), solo se degradan las operaciones que la usan: 503 `STORAGE_UNAVAILABLE` al subir fotos, respuesta `degradado: true` en el autocompletado. El resto de la API sigue funcionando.\n",
+    "description" : "API REST de Lebane para gestionar departamentos en venta: alta, edición, listado con filtros, fotos y consultas de interesados.\n\n**Convenciones**\n\n- **Errores**: toda respuesta 4xx/5xx tiene el mismo esquema `ApiError`, con un código estable en `error`, un mensaje apto para mostrar al usuario y el `requestId` para soporte. Nunca incluye stack traces, SQL ni detalles de infraestructura. Los errores de validación detallan cada campo en `fieldErrors` (las claves son las rutas del body o los nombres de los parámetros, p. ej. `direccion.ciudad`).\n- **Correlation ID**: cada request puede enviar `X-Request-Id`; si no lo envía o no es válido, el backend genera uno. La respuesta siempre lo devuelve y queda en todos los logs del request.\n- **Concurrencia optimista**: el detalle, el alta y la edición devuelven `ETag` con la versión del departamento. Enviarlo en `If-Match` al editar evita pisar cambios de otro usuario (412 si cambió).\n- **Paginación**: en el listado de departamentos, `pagina` (desde 0) y `cantidad` (1 a 100), con una ventana máxima de 10.000 resultados por búsqueda; en las consultas de un departamento, `page` y `size`. La respuesta usa el formato estándar de Spring Data (`content` + `page`).\n- **Disponibilidad**: si una dependencia no crítica falla (storage de imágenes, proveedor de direcciones), solo se degradan las operaciones que la usan: 503 `STORAGE_UNAVAILABLE` al subir fotos, respuesta `degradado: true` en el autocompletado. El resto de la API sigue funcionando.\n",
     "title" : "Lebane API",
     "version" : "v1"
   },
@@ -23,7 +23,7 @@
     "name" : "Direcciones"
   } ],
   "paths" : {
-    "/api/v1/departamentos" : {
+    "/api/departamentos" : {
       "get" : {
         "description" : "Listado paginado con filtros y orden, resueltos en la base de datos (nunca en memoria). Cada ítem trae su foto principal y la cantidad de fotos y de consultas. Los filtros se combinan con AND; los valores de `estado` se combinan con OR.",
         "operationId" : "listar",
@@ -64,7 +64,16 @@
             }
           }
         }, {
-          "description" : "Moneda. Obligatoria si se filtra por precio (ARS y USD no son comparables)",
+          "description" : "true: solo los disponibles; false: solo los reservados o vendidos. No se combina con estado",
+          "in" : "query",
+          "name" : "disponible",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "description" : "true: solo los disponibles; false: solo los reservados o vendidos. No se combina con estado"
+          }
+        }, {
+          "description" : "Moneda del filtro de precio (ARS y USD no son comparables). Si se filtra por precio sin indicarla, se usa USD",
           "in" : "query",
           "name" : "moneda",
           "required" : false,
@@ -74,23 +83,23 @@
             "enum" : [ "ARS", "USD" ]
           }
         }, {
-          "description" : "Precio mínimo (requiere moneda)",
+          "description" : "Precio mínimo, en la moneda indicada (USD si no se indica)",
           "in" : "query",
           "name" : "precioMin",
           "required" : false,
           "schema" : {
             "type" : "number",
-            "description" : "Precio mínimo (requiere moneda)",
+            "description" : "Precio mínimo, en la moneda indicada (USD si no se indica)",
             "minimum" : 0
           }
         }, {
-          "description" : "Precio máximo (requiere moneda; mayor o igual que precioMin)",
+          "description" : "Precio máximo, en la moneda indicada (USD si no se indica); mayor o igual que precioMin",
           "in" : "query",
           "name" : "precioMax",
           "required" : false,
           "schema" : {
             "type" : "number",
-            "description" : "Precio máximo (requiere moneda; mayor o igual que precioMin)",
+            "description" : "Precio máximo, en la moneda indicada (USD si no se indica); mayor o igual que precioMin",
             "minimum" : 0
           }
         }, {
@@ -168,30 +177,30 @@
             "description" : "true: solo los dados de baja (para reactivarlos); omitido o false: solo los publicados"
           }
         }, {
-          "description" : "Página, desde 0. (page + 1) × size no puede superar 10.000",
+          "description" : "Página, desde 0. (pagina + 1) × cantidad no puede superar 10.000",
           "example" : 0,
           "in" : "query",
-          "name" : "page",
+          "name" : "pagina",
           "required" : false,
           "schema" : {
             "type" : "integer",
             "format" : "int32",
             "default" : 0,
-            "description" : "Página, desde 0. (page + 1) × size no puede superar 10.000",
+            "description" : "Página, desde 0. (pagina + 1) × cantidad no puede superar 10.000",
             "example" : 0,
             "minimum" : 0
           }
         }, {
-          "description" : "Tamaño de página",
+          "description" : "Cantidad de departamentos por página",
           "example" : 20,
           "in" : "query",
-          "name" : "size",
+          "name" : "cantidad",
           "required" : false,
           "schema" : {
             "type" : "integer",
             "format" : "int32",
             "default" : 20,
-            "description" : "Tamaño de página",
+            "description" : "Cantidad de departamentos por página",
             "example" : 20,
             "maximum" : 100,
             "minimum" : 1
@@ -251,8 +260,8 @@
         "tags" : [ "Departamentos" ]
       },
       "post" : {
-        "description" : "Da de alta un departamento. El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 `TRANSICION_DE_ESTADO_INVALIDA`), ni repetir la dirección (calle, número, piso, unidad, ciudad y provincia) de otro departamento publicado (409 `AVISO_DUPLICADO`). Las fotos se suben después, de a una, con el endpoint de imágenes.",
-        "operationId" : "crear",
+        "description" : "Da de alta un departamento con sus fotos y responde 202 con el recurso creado. Con `multipart/form-data`, la parte `departamento` lleva los datos en JSON (`Content-Type: application/json`) y la parte `imagenes` se repite por cada foto (hasta 5; JPEG, PNG o WebP, validadas por contenido; la primera es la principal). Todo o nada: si una foto es inválida (400) o el storage falla (503), no se crea el departamento ni quedan fotos sueltas. También acepta el JSON solo, sin fotos (se pueden agregar después con el endpoint de imágenes). El backend genera el `codigo` comercial; si no se indica `estado`, queda DISPONIBLE. No se puede publicar directamente como VENDIDO (409 `TRANSICION_DE_ESTADO_INVALIDA`), ni repetir la dirección (calle, número, piso, unidad, ciudad y provincia) de otro departamento publicado (409 `AVISO_DUPLICADO`).",
+        "operationId" : "crearConImagenes",
         "parameters" : [ {
           "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
           "in" : "header",
@@ -270,12 +279,31 @@
               "schema" : {
                 "$ref" : "#/components/schemas/DepartamentoRequest"
               }
+            },
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "departamento" : {
+                    "$ref" : "#/components/schemas/DepartamentoRequest"
+                  },
+                  "imagenes" : {
+                    "type" : "array",
+                    "description" : "Fotos (repetir la parte por cada una, hasta 5)",
+                    "items" : {
+                      "type" : "string",
+                      "format" : "binary"
+                    }
+                  }
+                },
+                "required" : [ "departamento" ]
+              }
             }
           },
           "required" : true
         },
         "responses" : {
-          "201" : {
+          "202" : {
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -283,7 +311,7 @@
                 }
               }
             },
-            "description" : "Departamento creado",
+            "description" : "Departamento creado (con sus fotos, si se enviaron)",
             "headers" : {
               "ETag" : {
                 "description" : "Versión del departamento (p. ej. \"3\"). Enviarla en If-Match al editar para no pisar cambios de otro usuario.",
@@ -297,7 +325,7 @@
                 "description" : "Ruta relativa del departamento creado",
                 "schema" : {
                   "type" : "string",
-                  "example" : "/api/v1/departamentos/1"
+                  "example" : "/api/departamentos/1"
                 },
                 "style" : "simple"
               },
@@ -315,6 +343,9 @@
           "409" : {
             "$ref" : "#/components/responses/Conflict"
           },
+          "413" : {
+            "$ref" : "#/components/responses/PayloadTooLarge"
+          },
           "415" : {
             "$ref" : "#/components/responses/UnsupportedMediaType"
           },
@@ -329,7 +360,7 @@
         "tags" : [ "Departamentos" ]
       }
     },
-    "/api/v1/departamentos/{departamentoId}/imagenes" : {
+    "/api/departamentos/{departamentoId}/imagenes" : {
       "post" : {
         "description" : "Una foto por request, en `multipart/form-data` con el archivo en el campo `archivo`. El tipo se detecta por el **contenido** (JPEG, PNG o WebP), no por la extensión ni por el Content-Type declarado: un archivo que no es imagen responde 400. Máximo 5 MB por foto y 5 fotos por departamento (409 `LIMITE_IMAGENES_ALCANZADO`). Un departamento VENDIDO no admite cambios en sus fotos (409 `DEPARTAMENTO_NO_DISPONIBLE`). La primera foto es la principal. Si el storage no está disponible responde 503 `STORAGE_UNAVAILABLE` y no queda nada a medias.",
         "operationId" : "subir",
@@ -417,7 +448,7 @@
         "tags" : [ "Imágenes" ]
       }
     },
-    "/api/v1/departamentos/{departamentoId}/imagenes/{imagenId}" : {
+    "/api/departamentos/{departamentoId}/imagenes/{imagenId}" : {
       "delete" : {
         "description" : "Elimina la foto del departamento. Si el storage no está disponible, la foto se elimina igual (deja de verse en la aplicación) y el archivo queda registrado en los logs como huérfano para limpiarlo después. Un departamento VENDIDO no admite cambios en sus fotos (409 `DEPARTAMENTO_NO_DISPONIBLE`).",
         "operationId" : "eliminar",
@@ -486,7 +517,7 @@
         "tags" : [ "Imágenes" ]
       }
     },
-    "/api/v1/departamentos/{id}" : {
+    "/api/departamentos/{id}" : {
       "delete" : {
         "description" : "Baja lógica: el departamento sale del listado (se ve con `dadosDeBaja=true`) y no admite cambios: edición, fotos, consultas y una segunda baja responden 409 `DEPARTAMENTO_DADO_DE_BAJA`. El detalle se sigue pudiendo leer (con `fechaBaja`). El registro se conserva con sus fotos y consultas, y su dirección queda libre para otro aviso. Se puede dar de baja en cualquier estado, también vendido, y se revierte con la reactivación. Enviar en `If-Match` el ETag leído para no dar de baja una versión que otro usuario acaba de modificar (412).",
         "operationId" : "darDeBaja",
@@ -556,7 +587,7 @@
         "tags" : [ "Departamentos" ]
       },
       "get" : {
-        "description" : "Detalle completo: dirección, fotos ordenadas y cantidad de consultas.",
+        "description" : "Detalle completo: dirección, fotos ordenadas y consultas recibidas (la más reciente primero, con su cantidad). Responde 404 si no existe.",
         "operationId" : "obtener",
         "parameters" : [ {
           "description" : "ID del departamento",
@@ -720,7 +751,93 @@
         "tags" : [ "Departamentos" ]
       }
     },
-    "/api/v1/departamentos/{id}/consultas" : {
+    "/api/departamentos/{id}/consultas" : {
+      "get" : {
+        "description" : "Consultas recibidas, de la más reciente a la más antigua, paginadas en la base de datos. Incluye los datos de contacto para responderlas. También para un departamento dado de baja (sus consultas se conservan como historial).",
+        "operationId" : "listarConsultas",
+        "parameters" : [ {
+          "description" : "ID del departamento",
+          "example" : 1,
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0
+          }
+        }, {
+          "description" : "Página, desde 0",
+          "example" : 0,
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "maximum" : 1000,
+            "minimum" : 0
+          }
+        }, {
+          "description" : "Tamaño de página",
+          "example" : 10,
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 10,
+            "maximum" : 50,
+            "minimum" : 1
+          }
+        }, {
+          "description" : "Correlation ID del request (1 a 128 caracteres: letras, números, '.', '_', ':' o '-'). Si falta o no es válido, el backend genera un UUID.",
+          "in" : "header",
+          "name" : "X-Request-Id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "example" : "7f3c2a9e-req-42",
+            "pattern" : "^[A-Za-z0-9._:\\-]{1,128}$"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagedModelConsultaResponse"
+                }
+              }
+            },
+            "description" : "Página de consultas (puede estar vacía)",
+            "headers" : {
+              "X-Request-Id" : {
+                "description" : "Correlation ID del request (el recibido o uno generado)",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "$ref" : "#/components/responses/BadRequest"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/NotFound"
+          },
+          "500" : {
+            "$ref" : "#/components/responses/InternalError"
+          },
+          "503" : {
+            "$ref" : "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary" : "Listar las consultas de un departamento",
+        "tags" : [ "Consultas" ]
+      },
       "post" : {
         "description" : "Registra la consulta de un interesado. Un departamento VENDIDO no recibe consultas (409 `DEPARTAMENTO_NO_DISPONIBLE`), y el mismo email no puede consultar dos veces por el mismo departamento en 24 horas (409 `CONSULTA_DUPLICADA`). La respuesta no devuelve los datos personales enviados.",
         "operationId" : "crearConsulta",
@@ -798,7 +915,7 @@
         "tags" : [ "Consultas" ]
       }
     },
-    "/api/v1/departamentos/{id}/reactivacion" : {
+    "/api/departamentos/{id}/reactivacion" : {
       "post" : {
         "description" : "Vuelve a publicarlo tal como estaba: mismo estado, datos, fotos y consultas. Si está disponible o reservado y mientras tanto se publicó otro departamento en la misma dirección, responde 409 `AVISO_DUPLICADO`. Si no estaba dado de baja, 409 `DEPARTAMENTO_NO_DADO_DE_BAJA`. Sin cuerpo; enviar en `If-Match` el ETag leído (412 si otro usuario lo modificó).",
         "operationId" : "reactivar",
@@ -883,7 +1000,7 @@
         "tags" : [ "Departamentos" ]
       }
     },
-    "/api/v1/direcciones/autocompletar" : {
+    "/api/direcciones/autocompletar" : {
       "get" : {
         "description" : "Sugerencias para una dirección parcial, con calle, altura, ciudad, provincia y coordenadas. Siempre responde 200 si los parámetros son válidos: si el proveedor externo falla, tarda o tiene el circuito abierto, devuelve `degradado: true`, sin sugerencias y con un mensaje para cargar la dirección a mano (nunca datos inventados).",
         "operationId" : "autocompletar",
@@ -963,7 +1080,7 @@
                 "value" : {
                   "error" : "BAD_REQUEST",
                   "message" : "El cuerpo de la solicitud no es JSON válido",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 400,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -978,7 +1095,7 @@
                     "titulo" : "no debe estar vacío"
                   },
                   "message" : "La solicitud contiene datos inválidos",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 400,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1009,7 +1126,7 @@
                 "value" : {
                   "error" : "AVISO_DUPLICADO",
                   "message" : "Ya hay un departamento publicado en la misma dirección (calle, número, piso y unidad)",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1020,7 +1137,7 @@
                 "value" : {
                   "error" : "CONCURRENT_MODIFICATION",
                   "message" : "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
-                  "path" : "/api/v1/departamentos/7",
+                  "path" : "/api/departamentos/7",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1031,7 +1148,7 @@
                 "value" : {
                   "error" : "CONSULTA_DUPLICADA",
                   "message" : "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas",
-                  "path" : "/api/v1/departamentos/7/consultas",
+                  "path" : "/api/departamentos/7/consultas",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1042,7 +1159,7 @@
                 "value" : {
                   "error" : "DEPARTAMENTO_DADO_DE_BAJA",
                   "message" : "El departamento está dado de baja: hay que reactivarlo para modificarlo",
-                  "path" : "/api/v1/departamentos/7",
+                  "path" : "/api/departamentos/7",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1053,7 +1170,7 @@
                 "value" : {
                   "error" : "LIMITE_IMAGENES_ALCANZADO",
                   "message" : "El departamento ya tiene el máximo de 5 fotos",
-                  "path" : "/api/v1/departamentos/7/imagenes",
+                  "path" : "/api/departamentos/7/imagenes",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1064,7 +1181,7 @@
                 "value" : {
                   "error" : "DEPARTAMENTO_NO_DADO_DE_BAJA",
                   "message" : "El departamento no está dado de baja",
-                  "path" : "/api/v1/departamentos/7/reactivacion",
+                  "path" : "/api/departamentos/7/reactivacion",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1075,7 +1192,7 @@
                 "value" : {
                   "error" : "TRANSICION_DE_ESTADO_INVALIDA",
                   "message" : "Un departamento no se puede publicar directamente como vendido",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1086,7 +1203,7 @@
                 "value" : {
                   "error" : "DEPARTAMENTO_NO_DISPONIBLE",
                   "message" : "El departamento ya no está disponible y no recibe nuevas consultas",
-                  "path" : "/api/v1/departamentos/7/consultas",
+                  "path" : "/api/departamentos/7/consultas",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1097,7 +1214,7 @@
                 "value" : {
                   "error" : "DEPARTAMENTO_NO_DISPONIBLE",
                   "message" : "El departamento ya fue vendido y no se puede modificar",
-                  "path" : "/api/v1/departamentos/7",
+                  "path" : "/api/departamentos/7",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 409,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1128,7 +1245,7 @@
                 "value" : {
                   "error" : "INTERNAL_ERROR",
                   "message" : "Ocurrió un error inesperado; si persiste, informá el requestId",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 500,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1159,7 +1276,7 @@
                 "value" : {
                   "error" : "NOT_FOUND",
                   "message" : "No se encontró el departamento solicitado",
-                  "path" : "/api/v1/departamentos/999",
+                  "path" : "/api/departamentos/999",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 404,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1190,7 +1307,7 @@
                 "value" : {
                   "error" : "PAYLOAD_TOO_LARGE",
                   "message" : "La imagen supera el tamaño máximo de 5 MB",
-                  "path" : "/api/v1/departamentos/7/imagenes",
+                  "path" : "/api/departamentos/7/imagenes",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 413,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1221,7 +1338,7 @@
                 "value" : {
                   "error" : "PRECONDITION_FAILED",
                   "message" : "El recurso fue modificado desde la última lectura; recargalo y volvé a intentar",
-                  "path" : "/api/v1/departamentos/7",
+                  "path" : "/api/departamentos/7",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 412,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1252,7 +1369,7 @@
                 "value" : {
                   "error" : "SERVICE_UNAVAILABLE",
                   "message" : "El servicio no está disponible temporalmente; intentá nuevamente",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 503,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1263,7 +1380,7 @@
                 "value" : {
                   "error" : "STORAGE_UNAVAILABLE",
                   "message" : "El servicio de imágenes no está disponible; intentá nuevamente en unos minutos",
-                  "path" : "/api/v1/departamentos/7/imagenes",
+                  "path" : "/api/departamentos/7/imagenes",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 503,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1294,7 +1411,7 @@
                 "value" : {
                   "error" : "UNSUPPORTED_MEDIA_TYPE",
                   "message" : "Tipo de contenido no soportado",
-                  "path" : "/api/v1/departamentos",
+                  "path" : "/api/departamentos",
                   "requestId" : "7f3c2a9e-req-42",
                   "status" : 415,
                   "timestamp" : "2026-10-01T12:00:00Z"
@@ -1346,7 +1463,7 @@
           "path" : {
             "type" : "string",
             "description" : "Path del request (sin query string)",
-            "example" : "/api/v1/departamentos"
+            "example" : "/api/departamentos"
           },
           "requestId" : {
             "type" : "string",
@@ -1459,6 +1576,45 @@
         },
         "required" : [ "email", "mensaje", "nombre" ]
       },
+      "ConsultaResponse" : {
+        "type" : "object",
+        "description" : "Consulta recibida por un departamento",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Fecha de la consulta (UTC)",
+            "example" : "2026-10-01T12:00:00Z"
+          },
+          "email" : {
+            "type" : "string",
+            "description" : "Email de contacto",
+            "example" : "ana@example.com"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "ID de la consulta",
+            "example" : 42
+          },
+          "mensaje" : {
+            "type" : "string",
+            "description" : "Mensaje",
+            "example" : "¿Se puede visitar el sábado por la mañana?"
+          },
+          "nombre" : {
+            "type" : "string",
+            "description" : "Nombre de quien consulta",
+            "example" : "Ana Pérez"
+          },
+          "telefono" : {
+            "type" : [ "string", "null" ],
+            "description" : "Teléfono de contacto, si lo dejó",
+            "example" : "+54 11 5555-1234"
+          }
+        },
+        "required" : [ "createdAt", "email", "id", "mensaje", "nombre", "telefono" ]
+      },
       "DepartamentoDetailResponse" : {
         "type" : "object",
         "description" : "Departamento completo. La versión también viaja en el header ETag para editar con If-Match.",
@@ -1485,6 +1641,13 @@
             "type" : "string",
             "description" : "Código comercial legible, generado por el backend",
             "example" : "DEP-7K3M9QX2"
+          },
+          "consultas" : {
+            "type" : "array",
+            "description" : "Consultas recibidas, de la más reciente a la más antigua",
+            "items" : {
+              "$ref" : "#/components/schemas/ConsultaResponse"
+            }
           },
           "createdAt" : {
             "type" : "string",
@@ -1565,7 +1728,7 @@
             "example" : 0
           }
         },
-        "required" : [ "ambientes", "banos", "cantidadConsultas", "codigo", "createdAt", "direccion", "dormitorios", "estado", "id", "imagenes", "moneda", "precio", "superficieM2", "titulo", "updatedAt", "version" ]
+        "required" : [ "ambientes", "banos", "cantidadConsultas", "codigo", "consultas", "createdAt", "direccion", "dormitorios", "estado", "id", "imagenes", "moneda", "precio", "superficieM2", "titulo", "updatedAt", "version" ]
       },
       "DepartamentoListItemResponse" : {
         "type" : "object",
@@ -1670,7 +1833,7 @@
       },
       "DepartamentoRequest" : {
         "type" : "object",
-        "description" : "Datos de un departamento para el alta o la edición (reemplazo completo). Regla adicional: dormitorios debe ser menor que ambientes.",
+        "description" : "Datos del departamento, en JSON",
         "properties" : {
           "ambientes" : {
             "type" : "integer",
@@ -1767,14 +1930,14 @@
           },
           "latitud" : {
             "type" : "number",
-            "description" : "Latitud (WGS84, hasta 6 decimales). Requiere longitud",
+            "description" : "Latitud (WGS84). Se guarda redondeada a 6 decimales (~10 cm). Requiere longitud",
             "example" : -34.5889,
             "maximum" : 90,
             "minimum" : -90
           },
           "longitud" : {
             "type" : "number",
-            "description" : "Longitud (WGS84, hasta 6 decimales). Requiere latitud",
+            "description" : "Longitud (WGS84). Se guarda redondeada a 6 decimales (~10 cm). Requiere latitud",
             "example" : -58.4301,
             "maximum" : 180,
             "minimum" : -180
@@ -1932,6 +2095,22 @@
             "type" : "integer",
             "format" : "int64",
             "description" : "Total de páginas"
+          }
+        }
+      },
+      "PagedModelConsultaResponse" : {
+        "type" : "object",
+        "description" : "Página de resultados (formato estándar de Spring Data)",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "description" : "Resultados de la página, en el orden pedido",
+            "items" : {
+              "$ref" : "#/components/schemas/ConsultaResponse"
+            }
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageMetadata"
           }
         }
       },

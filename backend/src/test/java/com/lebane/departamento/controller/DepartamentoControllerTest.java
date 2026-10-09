@@ -33,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -45,6 +46,7 @@ import com.lebane.config.CorsProperties;
 import com.lebane.config.SecurityConfig;
 import com.lebane.departamento.TestFixtures;
 import com.lebane.departamento.dto.ConsultaCreatedResponse;
+import com.lebane.departamento.dto.ConsultaResponse;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
 import com.lebane.departamento.dto.DepartamentoListItemResponse;
 import com.lebane.departamento.dto.DepartamentoListadoParams;
@@ -52,6 +54,7 @@ import com.lebane.departamento.dto.DireccionResponse;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Moneda;
+import com.lebane.departamento.service.AltaDepartamentoService;
 import com.lebane.departamento.service.ConsultaService;
 import com.lebane.departamento.service.DepartamentoListadoService;
 import com.lebane.departamento.service.DepartamentoService;
@@ -68,7 +71,7 @@ import com.lebane.exception.ResourceNotFoundException;
 @EnableConfigurationProperties({ActuatorSecurityProperties.class, CorsProperties.class})
 class DepartamentoControllerTest {
 
-    private static final String BASE = "/api/v1/departamentos";
+    private static final String BASE = "/api/departamentos";
 
     @Autowired
     private MockMvc mockMvc;
@@ -79,22 +82,59 @@ class DepartamentoControllerTest {
     private DepartamentoListadoService listadoService;
     @MockitoBean
     private ConsultaService consultaService;
+    @MockitoBean
+    private AltaDepartamentoService altaService;
 
     // ---------- Casos exitosos ----------
 
     @Test
-    void crearReturns201WithRelativeLocationAndEtag() throws Exception {
+    void crearReturns202WithRelativeLocationAndEtag() throws Exception {
         when(departamentoService.crear(any())).thenReturn(detalle(15L, 0));
 
         mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(TestFixtures.departamentoJson())
                         .header("X-Request-Id", "req-create-1"))
-                .andExpect(status().isCreated())
+                .andExpect(status().isAccepted())
                 .andExpect(header().string("Location", BASE + "/15"))
                 .andExpect(header().string("ETag", "\"0\""))
                 .andExpect(header().string("X-Request-Id", "req-create-1"))
                 .andExpect(jsonPath("$.id").value(15))
                 .andExpect(jsonPath("$.codigo").value("DEP-ABCDEFGH"))
                 .andExpect(jsonPath("$.direccion.ciudad").value("CABA"));
+    }
+
+    /** Alta del enunciado: datos en la parte {@code departamento} (JSON) y las fotos en {@code imagenes}. */
+    @Test
+    void crearConImagenesEnMultipartReturns202() throws Exception {
+        when(altaService.crear(any(), any())).thenReturn(detalle(16L, 0));
+        org.springframework.mock.web.MockMultipartFile departamento = new org.springframework.mock.web.MockMultipartFile(
+                "departamento", "", MediaType.APPLICATION_JSON_VALUE, TestFixtures.departamentoJson().getBytes());
+        org.springframework.mock.web.MockMultipartFile foto = new org.springframework.mock.web.MockMultipartFile(
+                "imagenes", "frente.png", "image/png", new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(BASE)
+                        .file(departamento).file(foto).file(foto))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Location", BASE + "/16"))
+                .andExpect(jsonPath("$.id").value(16));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.List<org.springframework.web.multipart.MultipartFile>> imagenes =
+                ArgumentCaptor.forClass(java.util.List.class);
+        verify(altaService).crear(any(), imagenes.capture());
+        assertThat(imagenes.getValue()).hasSize(2);
+    }
+
+    @Test
+    void crearConImagenesValidaLosDatosDelDepartamento() throws Exception {
+        org.springframework.mock.web.MockMultipartFile departamento = new org.springframework.mock.web.MockMultipartFile(
+                "departamento", "", MediaType.APPLICATION_JSON_VALUE, "{\"titulo\": \"\"}".getBytes());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(BASE)
+                        .file(departamento))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.titulo").exists());
+        verifyNoInteractions(altaService);
     }
 
     @Test
@@ -106,6 +146,8 @@ class DepartamentoControllerTest {
                 .andExpect(header().string("ETag", "\"4\""))
                 .andExpect(jsonPath("$.version").value(4))
                 .andExpect(jsonPath("$.cantidadConsultas").value(2))
+                .andExpect(jsonPath("$.consultas[0].email").value("ana@example.com"))
+                .andExpect(jsonPath("$.consultas[1].telefono").value("+54 11 5555-0101"))
                 .andExpect(jsonPath("$.imagenes").isArray());
     }
 
@@ -230,19 +272,29 @@ class DepartamentoControllerTest {
 
     @Test
     void listarRejectsOutOfRangeParams() throws Exception {
-        mockMvc.perform(get(BASE).param("size", "500").param("sort", "titulo").param("q", "ab"))
+        mockMvc.perform(get(BASE).param("cantidad", "500").param("sort", "titulo").param("q", "ab"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors.size").exists())
+                .andExpect(jsonPath("$.fieldErrors.cantidad").exists())
                 .andExpect(jsonPath("$.fieldErrors.sort").exists())
                 .andExpect(jsonPath("$.fieldErrors.q").exists());
         verifyNoInteractions(listadoService);
     }
 
     @Test
-    void listarRequiresMonedaForPriceFilter() throws Exception {
-        mockMvc.perform(get(BASE).param("precioMax", "100000"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors.moneda").value("es obligatoria para filtrar por precio"));
+    void listarAceptaLosParametrosDelEnunciado() throws Exception {
+        when(listadoService.listar(any())).thenReturn(new PagedModel<>(Page.empty()));
+
+        mockMvc.perform(get(BASE).param("pagina", "2").param("cantidad", "15").param("disponible", "true")
+                        .param("precioMin", "50000").param("precioMax", "100000"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<DepartamentoListadoParams> params = ArgumentCaptor.forClass(DepartamentoListadoParams.class);
+        verify(listadoService).listar(params.capture());
+        assertThat(params.getValue().pagina()).isEqualTo(2);
+        assertThat(params.getValue().cantidad()).isEqualTo(15);
+        assertThat(params.getValue().disponible()).isTrue();
+        // Sin moneda, el filtro de precio se interpreta en USD (ARS y USD no son comparables).
+        assertThat(params.getValue().moneda()).isEqualTo(Moneda.USD);
     }
 
     // ---------- Validación ----------
@@ -444,7 +496,7 @@ class DepartamentoControllerTest {
 
     @Test
     void unknownRouteReturnsApiError404() throws Exception {
-        mockMvc.perform(get("/api/v1/no-existe").header("X-Request-Id", "req-404-1"))
+        mockMvc.perform(get("/api/no-existe").header("X-Request-Id", "req-404-1"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").value("req-404-1"));
@@ -455,6 +507,10 @@ class DepartamentoControllerTest {
                 new BigDecimal("185000.00"), Moneda.USD, 3, 2, 1, new BigDecimal("72.50"),
                 EstadoDepartamento.DISPONIBLE,
                 new DireccionResponse("Gorriti", "4850", "7", "B", "CABA", "CABA", "C1414", null, null, null),
-                List.of(), 2, version, Instant.parse("2026-10-01T12:00:00Z"), Instant.parse("2026-10-01T12:00:00Z"), null);
+                List.of(), 2, List.of(
+                        new ConsultaResponse(8L, "Ana Pérez", "ana@example.com", null, "¿Se puede visitar?",
+                                Instant.parse("2026-10-02T12:00:00Z")),
+                        new ConsultaResponse(7L, "Martín Gómez", "martin@example.com", "+54 11 5555-0101",
+                                "¿Acepta crédito?", Instant.parse("2026-10-01T12:00:00Z"))), version, Instant.parse("2026-10-01T12:00:00Z"), Instant.parse("2026-10-01T12:00:00Z"), null);
     }
 }

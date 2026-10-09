@@ -47,7 +47,7 @@ import jakarta.persistence.EntityManagerFactory;
 @ImportTestcontainers(PostgresContainer.class)
 class DepartamentoApiIT {
 
-    private static final String BASE = "/api/v1/departamentos";
+    private static final String BASE = "/api/departamentos";
 
     @Autowired
     private TestRestTemplate rest;
@@ -73,7 +73,7 @@ class DepartamentoApiIT {
         // Alta
         ResponseEntity<String> created = rest.exchange(BASE, HttpMethod.POST, json(TestFixtures.departamentoJson()),
                 String.class);
-        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         JsonNode body = objectMapper.readTree(created.getBody());
         long id = body.path("id").asLong();
         assertThat(created.getHeaders().getLocation()).hasToString(BASE + "/" + id);
@@ -112,6 +112,49 @@ class DepartamentoApiIT {
         assertThat(consulta.getBody()).doesNotContain("example.com");
         JsonNode afterConsulta = objectMapper.readTree(rest.getForEntity(BASE + "/" + id, String.class).getBody());
         assertThat(afterConsulta.path("cantidadConsultas").asLong()).isEqualTo(1);
+    }
+
+    /** Las consultas de cada departamento se pueden leer, paginadas y de la más reciente a la más antigua. */
+    @Test
+    void consultasSeListanPaginadas() throws Exception {
+        long id = crearDisponible();
+        String consultas = BASE + "/" + id + "/consultas";
+        for (String usuario : new String[] {"primera", "segunda", "tercera"}) {
+            assertThat(rest.exchange(consultas, HttpMethod.POST,
+                    json(TestFixtures.consultaJson().replace("ana.perez@", usuario + "@")), String.class)
+                    .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        }
+
+        ResponseEntity<String> pagina = rest.getForEntity(consultas + "?size=2", String.class);
+        assertThat(pagina.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(pagina.getBody());
+        assertThat(body.path("page").path("totalElements").asLong()).isEqualTo(3);
+        assertThat(body.path("page").path("totalPages").asLong()).isEqualTo(2);
+        assertThat(body.path("content")).hasSize(2);
+        assertThat(body.path("content").get(0).path("email").asText()).isEqualTo("tercera@example.com");
+        assertThat(body.path("content").get(0).path("mensaje").asText()).isNotBlank();
+        assertThat(body.path("content").get(1).path("email").asText()).isEqualTo("segunda@example.com");
+
+        JsonNode segunda = objectMapper.readTree(rest.getForEntity(consultas + "?size=2&page=1", String.class).getBody());
+        assertThat(segunda.path("content")).hasSize(1);
+        assertThat(segunda.path("content").get(0).path("email").asText()).isEqualTo("primera@example.com");
+
+        assertError(rest.getForEntity(BASE + "/999999/consultas", String.class), HttpStatus.NOT_FOUND, "NOT_FOUND");
+        assertThat(rest.getForEntity(consultas + "?size=0", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    /** El autocompletado (p. ej. Georef) trae coordenadas con más de 6 decimales: se aceptan y se redondean. */
+    @Test
+    void coordenadasConMasDecimalesSeRedondean() throws Exception {
+        String conMuchosDecimales = TestFixtures.departamentoJson(TestFixtures.unidadUnica())
+                .replace("-34.5889", "-34.59581734221").replace("-58.4305", "-58.39391185746");
+        ResponseEntity<String> created = rest.exchange(BASE, HttpMethod.POST, json(conMuchosDecimales), String.class);
+
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        JsonNode direccion = objectMapper.readTree(created.getBody()).path("direccion");
+        assertThat(direccion.path("latitud").decimalValue()).isEqualByComparingTo("-34.595817");
+        assertThat(direccion.path("longitud").decimalValue()).isEqualByComparingTo("-58.393912");
     }
 
     @Test
@@ -172,7 +215,7 @@ class DepartamentoApiIT {
     void duplicateRulesAreEnforcedOverHttp() throws Exception {
         String alta = TestFixtures.departamentoJson(TestFixtures.unidadUnica());
         ResponseEntity<String> primero = rest.exchange(BASE, HttpMethod.POST, json(alta), String.class);
-        assertThat(primero.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(primero.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         long id = objectMapper.readTree(primero.getBody()).path("id").asLong();
 
         // La misma dirección (con otras mayúsculas) no se publica dos veces, ni por alta ni por edición.
@@ -187,7 +230,7 @@ class DepartamentoApiIT {
                 json(alta.replace("}\n}", "},\n  \"estado\": \"VENDIDO\"\n}")), String.class);
         assertThat(vendido.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(rest.exchange(BASE, HttpMethod.POST, json(alta), String.class).getStatusCode())
-                .isEqualTo(HttpStatus.CREATED);
+                .isEqualTo(HttpStatus.ACCEPTED);
 
         // El mismo email (sin distinguir mayúsculas) no consulta dos veces por el mismo departamento en 24 horas.
         String consultas = BASE + "/" + otro + "/consultas";
@@ -242,7 +285,7 @@ class DepartamentoApiIT {
 
         // La dirección queda libre: otro aviso la ocupa y la reactivación choca con él.
         ResponseEntity<String> otro = rest.exchange(BASE, HttpMethod.POST, json(alta), String.class);
-        assertThat(otro.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(otro.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertError(rest.exchange(url + "/reactivacion", HttpMethod.POST, json("", null), String.class),
                 HttpStatus.CONFLICT, "AVISO_DUPLICADO");
 
@@ -275,7 +318,7 @@ class DepartamentoApiIT {
     private long crearDisponible() throws Exception {
         ResponseEntity<String> created = rest.exchange(BASE, HttpMethod.POST, json(TestFixtures.departamentoJson()),
                 String.class);
-        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         return objectMapper.readTree(created.getBody()).path("id").asLong();
     }
 
@@ -299,7 +342,7 @@ class DepartamentoApiIT {
         assertThat(body.path("requestId").asText()).isEqualTo("it-404-req");
         assertThat(body.path("path").asText()).isEqualTo(BASE + "/999999999");
 
-        ResponseEntity<String> unknownRoute = rest.getForEntity("/api/v1/no-existe", String.class);
+        ResponseEntity<String> unknownRoute = rest.getForEntity("/api/no-existe", String.class);
         assertThat(unknownRoute.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(objectMapper.readTree(unknownRoute.getBody()).path("error").asText()).isEqualTo("NOT_FOUND");
 

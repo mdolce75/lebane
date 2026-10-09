@@ -150,7 +150,7 @@ class GlobalExceptionHandlerTest {
     }
 
     private static MockHttpServletRequest request() {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/departamentos/7/imagenes");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/departamentos/7/imagenes");
         request.setAttribute(RequestContext.REQUEST_ID_ATTRIBUTE, "req-handler-1");
         return request;
     }
@@ -162,7 +162,7 @@ class GlobalExceptionHandlerTest {
         assertThat(body).isNotNull();
         assertThat(body.status()).isEqualTo(status.value());
         assertThat(body.error()).isEqualTo(code.name());
-        assertThat(body.path()).isEqualTo("/api/v1/departamentos/7/imagenes");
+        assertThat(body.path()).isEqualTo("/api/departamentos/7/imagenes");
         assertThat(body.requestId()).isEqualTo("req-handler-1");
         assertThat(body.message()).doesNotContain("SELECT", "password", "s3cr3t", "Exception", "com.");
     }

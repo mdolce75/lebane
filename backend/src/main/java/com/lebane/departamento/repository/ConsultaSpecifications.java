@@ -17,7 +17,7 @@ public final class ConsultaSpecifications {
     private ConsultaSpecifications() {
     }
 
-    /** Usa {@code ix_consulta_departamento}. */
+    /** Usa {@code ix_consulta_departamento_fecha}. */
     public static Specification<Consulta> deDepartamento(Long departamentoId) {
         return (root, query, cb) -> cb.equal(root.get(Consulta_.departamento).get(Departamento_.id), departamentoId);
     }

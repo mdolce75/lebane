@@ -30,8 +30,8 @@ const coordenada = (limite: number) =>
     .string()
     .trim()
     .refine(
-      (v) => v === '' || (/^-?\d{1,3}(\.\d{1,6})?$/.test(v) && Math.abs(Number(v)) <= limite),
-      `Entre -${limite} y ${limite}, hasta 6 decimales`,
+      (v) => v === '' || (/^-?\d{1,3}(\.\d+)?$/.test(v) && Math.abs(Number(v)) <= limite),
+      `Entre -${limite} y ${limite}`,
     );
 
 export const departamentoFormSchema = z
@@ -106,6 +106,9 @@ function toNumber(value: string): number {
   return Number(value.replace(',', '.'));
 }
 
+/** Se guardan con 6 decimales (~10 cm): un proveedor de direcciones puede traer más. */
+const aCoordenada = (value: string | undefined) => (value ? Number(Number(value).toFixed(6)) : null);
+
 const nullable = (value: string) => (value.trim() === '' ? null : value.trim());
 
 /** Valores ya validados → cuerpo del request. */
@@ -129,8 +132,8 @@ export function toPayload(v: DepartamentoFormValues): DepartamentoPayload {
       ciudad: d.ciudad.trim(),
       provincia: d.provincia.trim(),
       codigoPostal: nullable(d.codigoPostal ?? ''),
-      latitud: d.latitud ? Number(d.latitud) : null,
-      longitud: d.longitud ? Number(d.longitud) : null,
+      latitud: aCoordenada(d.latitud),
+      longitud: aCoordenada(d.longitud),
       placeId: nullable(d.placeId ?? ''),
     },
   };
