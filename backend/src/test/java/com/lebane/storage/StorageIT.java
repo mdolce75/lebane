@@ -106,7 +106,7 @@ class StorageIT {
         assertThat(publica.headers().firstValue("Content-Type")).contains("image/png");
         assertThat(publica.body()).isEqualTo(png);
 
-        JsonNode detalle = objectMapper.readTree(rest.getForObject("/api/v1/departamentos/" + id, String.class));
+        JsonNode detalle = objectMapper.readTree(rest.getForObject("/api/departamentos/" + id, String.class));
         assertThat(detalle.path("imagenes")).hasSize(1);
         assertThat(detalle.path("imagenes").get(0).path("url").asText()).isEqualTo(url);
 
@@ -131,7 +131,7 @@ class StorageIT {
         assertThat(objetos("departamentos/" + id + "/")).isEqualTo(5);
         assertThat(imagenRepository.countByDepartamentoId(id)).isEqualTo(5);
         JsonNode listado = objectMapper.readTree(rest.getForObject(
-                "/api/v1/departamentos?q=" + "IT Storage " + id + "&size=1", String.class));
+                "/api/departamentos?q=" + "IT Storage " + id + "&cantidad=1", String.class));
         assertThat(listado.path("content").get(0).path("cantidadImagenes").asInt()).isEqualTo(5);
         assertThat(listado.path("content").get(0).path("imagenPrincipalUrl").asText()).contains("/departamentos/" + id);
     }
@@ -153,14 +153,14 @@ class StorageIT {
         long id = crearDepartamento();
         JsonNode imagen = objectMapper.readTree(subir(id, TestImages.realPng(), "a.png").getBody());
 
-        ResponseEntity<Void> response = rest.exchange("/api/v1/departamentos/" + id + "/imagenes/"
+        ResponseEntity<Void> response = rest.exchange("/api/departamentos/" + id + "/imagenes/"
                 + imagen.path("id").asLong(), HttpMethod.DELETE, null, Void.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(objetos("departamentos/" + id + "/")).isZero();
         assertThat(http.send(HttpRequest.newBuilder(URI.create(imagen.path("url").asText())).build(),
                 HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(404);
-        assertThat(objectMapper.readTree(rest.getForObject("/api/v1/departamentos/" + id, String.class))
+        assertThat(objectMapper.readTree(rest.getForObject("/api/departamentos/" + id, String.class))
                 .path("imagenes")).isEmpty();
     }
 
@@ -180,17 +180,84 @@ class StorageIT {
         assertThat(objetos("departamentos/" + seed3 + "/")).isEqualTo(3);
     }
 
+    /** Alta del enunciado: datos y fotos en el mismo request, 202 con el recurso creado y sus fotos. */
+    @Test
+    void altaConFotosEnUnSoloRequest() throws Exception {
+        ResponseEntity<String> response = altaMultipart(TestFixtures.departamentoJson(TestFixtures.unidadUnica()),
+                TestImages.realPng(), TestImages.realPng());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        JsonNode creado = objectMapper.readTree(response.getBody());
+        assertThat(creado.path("imagenes")).hasSize(2);
+        assertThat(creado.path("imagenes").get(0).path("posicion").asInt()).isZero();
+        String url = creado.path("imagenes").get(1).path("url").asText();
+        HttpResponse<byte[]> publica = http.send(HttpRequest.newBuilder(URI.create(url)).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(publica.statusCode()).isEqualTo(200);
+
+        JsonNode detalle = objectMapper.readTree(rest.getForObject(
+                "/api/departamentos/" + creado.path("id").asLong(), String.class));
+        assertThat(detalle.path("imagenes")).hasSize(2);
+    }
+
+    /** Todo o nada: con una foto inválida no se crea el departamento ni se sube ninguna foto. */
+    @Test
+    void altaConUnaFotoInvalidaNoCreaNada() throws Exception {
+        long departamentosAntes = departamentoRepository.count();
+        int objetosAntes = objetos("departamentos/altas/");
+
+        ResponseEntity<String> response = altaMultipart(TestFixtures.departamentoJson(TestFixtures.unidadUnica()),
+                TestImages.realPng(), "<html>no soy una foto</html>".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(objectMapper.readTree(response.getBody()).path("fieldErrors").has("imagenes[1]")).isTrue();
+        assertThat(departamentoRepository.count()).isEqualTo(departamentosAntes);
+        assertThat(objetos("departamentos/altas/")).isEqualTo(objetosAntes);
+    }
+
+    /** Un alta rechazada por las reglas de negocio (dirección ocupada) no deja fotos en el storage. */
+    @Test
+    void altaRechazadaNoDejaFotosSueltas() throws Exception {
+        String alta = TestFixtures.departamentoJson(TestFixtures.unidadUnica());
+        assertThat(altaMultipart(alta).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        int objetosAntes = objetos("departamentos/altas/");
+
+        ResponseEntity<String> duplicado = altaMultipart(alta, TestImages.realPng());
+
+        assertThat(duplicado.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(objetos("departamentos/altas/")).isEqualTo(objetosAntes);
+    }
+
+    private ResponseEntity<String> altaMultipart(String departamento, byte[]... fotos) {
+        MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        HttpHeaders json = new HttpHeaders();
+        json.setContentType(MediaType.APPLICATION_JSON);
+        form.add("departamento", new HttpEntity<>(departamento, json));
+        for (int i = 0; i < fotos.length; i++) {
+            String nombre = "foto" + i + ".png";
+            form.add("imagenes", new ByteArrayResource(fotos[i]) {
+                @Override
+                public String getFilename() {
+                    return nombre;
+                }
+            });
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        return rest.exchange("/api/departamentos", HttpMethod.POST, new HttpEntity<>(form, headers), String.class);
+    }
+
     private long crearDepartamento() throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         String marca = "IT Storage " + UUID.randomUUID().toString().substring(0, 8);
         String body = TestFixtures.departamentoJson().replace("3 ambientes en Palermo", marca);
-        JsonNode creado = objectMapper.readTree(rest.exchange("/api/v1/departamentos", HttpMethod.POST,
+        JsonNode creado = objectMapper.readTree(rest.exchange("/api/departamentos", HttpMethod.POST,
                 new HttpEntity<>(body, headers), String.class).getBody());
         long id = creado.path("id").asLong();
         // Título único y buscable: "IT Storage <id>"
         String update = TestFixtures.departamentoJson().replace("3 ambientes en Palermo", "IT Storage " + id);
-        rest.exchange("/api/v1/departamentos/" + id, HttpMethod.PUT, new HttpEntity<>(update, headers),
+        rest.exchange("/api/departamentos/" + id, HttpMethod.PUT, new HttpEntity<>(update, headers),
                 String.class);
         return id;
     }
@@ -205,7 +272,7 @@ class StorageIT {
         });
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        return rest.exchange("/api/v1/departamentos/" + id + "/imagenes", HttpMethod.POST,
+        return rest.exchange("/api/departamentos/" + id + "/imagenes", HttpMethod.POST,
                 new HttpEntity<>(form, headers), String.class);
     }
 

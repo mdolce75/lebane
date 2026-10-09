@@ -76,13 +76,13 @@ un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/R
 | `DepartamentoBajaTest` | la baja guarda la fecha y no cambia el estado; no se repite; la reactivación la revierte |
 | `DireccionTest` | criterio de "misma dirección": sin mayúsculas, sin código postal ni coordenadas, piso y unidad cuentan |
 | `EstadoDepartamentoTest`, frontend `estadoReglas.test.ts` | matriz de transiciones de estado, vendido como registro cerrado (mismas reglas en backend y frontend) |
-| `DepartamentoControllerTest` | contrato HTTP (201 + `Location` relativo + `ETag`, 412, 409, 404, 405, 415, 503, 500) y esquema `ApiError` sin detalles internos |
+| `DepartamentoControllerTest` | contrato HTTP (alta 202 JSON y multipart + `Location` relativo + `ETag`, 412, 409, 404, 405, 415, 503, 500) y esquema `ApiError` sin detalles internos |
 | `EntityMappingRulesTest` | ninguna relación EAGER ni colección mapeada |
 | `EntityTagsTest`, `CodigoDepartamentoGeneratorTest`, `SeedDataTest` | ETags, formato de códigos, seed válido |
 | `PersistenceIT` | Flyway + validación de esquema, auditoría, versión, `CHECK`/`UNIQUE` en la base (máx. 5 fotos, dormitorios, código), orden de imágenes, relaciones LAZY |
 | `DepartamentoApiIT` | ciclo HTTP completo contra PostgreSQL, `If-Match`, consultas, reglas de estado y de duplicados, baja y reactivación (412, 409 al modificar, detalle con `fechaBaja`, filtro `dadosDeBaja`, datos conservados, dirección libre y ocupada), errores y **3 sentencias SQL fijas en el detalle** (sin N+1) |
 | `DevDataSeederIT` | seed al arrancar, idempotente, sin pisar ediciones ni recrear avisos dados de baja |
-| `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, moneda obligatoria para precio, ventana máxima |
+| `CampoOrdenTest`, `ListadoParamsValidationTest` | órdenes de la lista blanca, defaults, rangos, precio sin moneda en USD, `disponible` sin `estado`, ventana máxima |
 | `DepartamentoListadoServiceTest` | orden de la página preservado, agregados indexados por ID, `COUNT` y agregados omitidos cuando no hacen falta |
 | `DepartamentoControllerTest` (listado) | formato `PagedModel`, binding de query params, errores de conversión sin detalles técnicos |
 | `SinConsultasDeTextoTest` | ningún archivo del backend tiene `@Query`, `createQuery(String)`, SQL nativo, `JdbcTemplate` ni sentencias en literales, y ningún repositorio declara consultas derivadas: todo es Criteria API |
@@ -152,9 +152,9 @@ compilación limpia y todas las suites. Los números de tests son los de ese mom
 | Probes (directo y vía nginx) | health, liveness y readiness `200 {"status":"UP"}` en ~25 ms, sin detalles |
 | PostgreSQL detenido | liveness **200**; readiness, health y API **503** (`SERVICE_UNAVAILABLE`, sin detalles) en ~3 s; vuelve a 200 solo al levantarlo |
 | Exposición de Actuator | info público; metrics/prometheus/actuator 401 sin credenciales o con credenciales incorrectas; env, beans, heapdump, configprops, loggers, threaddump y shutdown 404; nginx solo deja pasar health |
-| Endpoints | alta 201 con `Location` y `ETag`; detalle; `PUT` con `If-Match` viejo 412 y correcto 200; consulta 201; 404; validaciones 400 por campo; JSON inválido 400 |
+| Endpoints | alta 202 con `Location` y `ETag`; detalle; `PUT` con `If-Match` viejo 412 y correcto 200; consulta 201; 404; validaciones 400 por campo; JSON inválido 400 |
 | Paginación y filtros | totales y páginas correctos; `size>100`, página fuera de la ventana y `sort` no permitido 400; filtros por estado, moneda, precio, ambientes, fotos y texto verificados sobre cada resultado; orden correcto; `%` escapado |
-| MinIO | subida 201 y lectura pública 200; archivo falso 400; 6ª foto 409; 6 MB 413; borrado 204 y objeto 404 |
+| MinIO | alta multipart con fotos 202 (todo o nada, sin fotos sueltas si falla); subida 201 y lectura pública 200; archivo falso 400; 6ª foto 409; 6 MB 413; borrado 204 y objeto 404 |
 | MinIO detenido | subidas 503 `STORAGE_UNAVAILABLE` con 3 intentos; el circuito se abre y rechaza en ~20 ms; listado, detalle y readiness 200; recuperación por `HALF_OPEN` |
 | Proveedor de direcciones inalcanzable | TimeLimiter de 2 s, 2 intentos, circuito abierto y respuestas degradadas (200, `degradado=true`) en ~15 ms; listado y readiness sin impacto |
 | Logstash detenido | latencia del listado sin cambios (p95 70 ms con y sin Logstash); readiness 200; stdout 100 % JSON; un único aviso JSON; eventos de la caída enviados al reconectar |

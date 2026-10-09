@@ -35,6 +35,10 @@ h2 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
 .button--danger:hover:not(:disabled) { background: var(--color-danger-bg); border-color: var(--color-danger); }
 .page-header__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .page-header__alert { flex-basis: 100%; }
+.button--link {
+  background: none; border: none; padding: 0.4rem 0; color: var(--color-primary); text-decoration: underline;
+  cursor: pointer; font: inherit; font-size: 0.85rem;
+}
 .button--small { padding: 8px 14px; font-size: 0.8rem; }
 .link-button {
   background: none; border: none; color: var(--color-primary); cursor: pointer; padding: 0;
@@ -215,6 +219,18 @@ fieldset:disabled .checkbox { opacity: 0.45; cursor: not-allowed; }
   letter-spacing: -0.02em; margin: 0 0 1rem;
 }
 .detail__description { white-space: pre-line; }
+/* Dirección elegida con el autocompletado */
+.direccion-elegida { background: var(--color-bg-soft); border-radius: var(--radius); padding: 0.75rem 1rem; }
+.direccion-elegida__texto { margin: 0; }
+.direccion-elegida__acciones { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+
+/* Consultas recibidas */
+.consultas__lista { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
+.consultas__lista[aria-busy="true"] { opacity: 0.6; }
+.consultas__item { background: var(--color-bg-soft); border-radius: var(--radius); padding: 0.9rem 1rem; }
+.consultas__cabecera { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; }
+.consultas__contacto { margin: 0.25rem 0 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.consultas__mensaje { margin: 0.5rem 0 0; white-space: pre-line; }
 .detail__meta { margin-top: 2rem; font-size: 0.8rem; color: var(--color-subtle); }
 .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 0; }
 .facts div { background: var(--color-bg-soft); border-radius: var(--radius); padding: 0.75rem 0.9rem; }

@@ -2,6 +2,7 @@
 
 [← Volver al README](../README.md)
 
+- [Contrato del enunciado](#contrato-del-enunciado)
 - [Endpoints](#endpoints)
 - [Errores](#errores)
 - [Listado: paginación, filtros y orden](#listado-paginación-filtros-y-orden)
@@ -9,9 +10,38 @@
 
 ---
 
+## Contrato del enunciado
+
+Los cuatro endpoints del enunciado se respetan tal cual (rutas, parámetros, cuerpo y status). Todo lo demás es
+**agregado**: parámetros opcionales y endpoints nuevos que no cambian lo que pide el enunciado.
+
+| Enunciado | Cómo se cumple |
+|---|---|
+| `POST /api/departamentos`, el body acepta los datos **y sus imágenes**, devuelve el recurso creado, `202 Accepted` | `multipart/form-data` con la parte `departamento` (JSON) y la parte `imagenes` repetida por foto (0 a 5). Responde `202` con el detalle creado (incluidas las fotos), `Location` y `ETag`. Es todo o nada: si una foto es inválida o falla el guardado no queda ni el departamento ni fotos sueltas en MinIO. También acepta el mismo JSON con `Content-Type: application/json` (alta sin fotos), con la misma respuesta |
+| `GET /api/departamentos`, `pagina`, `cantidad`, filtros `disponible`, `precioMin`, `precioMax`; cada ítem con la URL de la imagen principal, la cantidad de imágenes y de consultas; fluido con ≥ 500; `200` | `pagina` (desde 0) y `cantidad` (1..100, default 20). `disponible=true` trae solo `DISPONIBLE`; `disponible=false`, los `RESERVADO` y `VENDIDO`. `precioMin`/`precioMax` funcionan solos: sin `moneda` el rango se interpreta en dólares. Cada ítem trae `imagenPrincipalUrl`, `cantidadImagenes` y `cantidadConsultas`. El seed carga 500 departamentos y la performance está medida con 100.000 ([abajo](#validación-de-performance)) |
+| `GET /api/departamentos/{id}`, toda la info, sus imágenes y **consultas**; `404` si no existe; `200` | El detalle trae `imagenes` y `consultas` (nombre, email, teléfono, mensaje y fecha, de la más reciente a la más antigua), además de `cantidadConsultas` |
+| `PUT /api/departamentos/{id}`, actualiza los campos; `404`; `200` | Igual. `If-Match` es **opcional**: si se manda y no coincide, `412` (evita pisar cambios de otro usuario) |
+
+Agregados, y por qué:
+
+- **Filtros extra** del listado (`moneda`, `estado`, `ciudad`, `q`, superficie, ambientes, dormitorios, baños,
+  `conImagenes`, `dadosDeBaja`, `sort`): el enunciado permite sumar los útiles. `disponible` y `estado` no se
+  combinan (`400`), porque pedirían cosas contradictorias.
+- **`moneda`** en el listado: el seed tiene precios en `USD` y `ARS`, y comparar montos de distintas monedas no
+  tiene sentido. Por eso sin `moneda` el rango de precio es en dólares (la moneda habitual de los avisos), y con
+  `moneda=ARS` se filtra en pesos.
+- **`POST /{id}/imagenes` y `DELETE /{id}/imagenes/{imagenId}`**: el `PUT` del enunciado actualiza campos; para
+  agregar o quitar fotos de un departamento existente hacen falta estos dos.
+- **`POST /{id}/consultas`** y **`GET /{id}/consultas`**: el primero es cómo llegan las consultas; el segundo las
+  pagina para la pantalla de detalle (el detalle ya las trae todas).
+- **`DELETE /{id}`** y **`POST /{id}/reactivacion`**: baja lógica, para que un aviso deje de publicarse sin perder
+  su historial de consultas.
+- **`GET /api/direcciones/autocompletar`**: el autocompletado de direcciones del formulario.
+- **Headers** `ETag`, `If-Match`, `Location` y `X-Request-Id`: opcionales para el cliente, no cambian el contrato.
+
 ## Endpoints
 
-API REST versionada bajo `/api/v1`. JSON en request y response. En Docker el navegador la consume vía el proxy del
+API REST bajo `/api`, con las rutas del enunciado (`/api/departamentos`). JSON en request y response. En Docker el navegador la consume vía el proxy del
 frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://localhost:8080/api/...`.
 
 **Documentación OpenAPI 3.1** (springdoc, generada desde el código):
@@ -28,21 +58,37 @@ frontend (`http://localhost:3000/api/...`, mismo origen); directo en `http://loc
 
 | Método | Ruta | Descripción | Respuestas |
 |---|---|---|---|
-| `GET` | `/api/v1/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
-| `POST` | `/api/v1/departamentos` | Alta (no como `VENDIDO` ni en la dirección de otro publicado) | `201` + `Location` + `ETag` · `400` · `409` |
-| `GET` | `/api/v1/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, cantidad de consultas, `fechaBaja`) | `200` + `ETag` · `400` · `404` |
-| `PUT` | `/api/v1/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional; un `VENDIDO` no se edita | `200` + `ETag` · `400` · `404` · `409` · `412` |
-| `DELETE` | `/api/v1/departamentos/{id}` | Baja lógica (ver abajo); `If-Match` opcional | `204` · `400` · `404` · `409` · `412` |
-| `POST` | `/api/v1/departamentos/{id}/reactivacion` | Reactivar un dado de baja; `If-Match` opcional | `200` + `ETag` · `400` · `404` · `409` · `412` |
-| `POST` | `/api/v1/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido o repetida) |
-| `POST` | `/api/v1/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](arquitectura.md#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
-| `DELETE` | `/api/v1/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` · `409` (vendido) |
-| `GET` | `/api/v1/direcciones/autocompletar?q=` | Autocompletado de direcciones ([detalle](arquitectura.md#autocompletado-de-direcciones)) | `200` · `400` |
+| `GET` | `/api/departamentos` | Listado paginado con filtros y orden ([detalle](#listado-paginación-filtros-y-orden)) | `200` · `400` |
+| `POST` | `/api/departamentos` | Alta con sus fotos en un solo request (`multipart/form-data`) o sin fotos (JSON). No como `VENDIDO` ni en la dirección de otro publicado | `202` + `Location` + `ETag` · `400` · `409` · `413` · `503` |
+| `GET` | `/api/departamentos/{id}` | Detalle completo (dirección, imágenes ordenadas, consultas recibidas, `fechaBaja`) | `200` + `ETag` · `400` · `404` |
+| `PUT` | `/api/departamentos/{id}` | Edición (reemplazo completo); `If-Match` opcional; un `VENDIDO` no se edita | `200` + `ETag` · `400` · `404` · `409` · `412` |
+| `DELETE` | `/api/departamentos/{id}` | Baja lógica (ver abajo); `If-Match` opcional | `204` · `400` · `404` · `409` · `412` |
+| `POST` | `/api/departamentos/{id}/reactivacion` | Reactivar un dado de baja; `If-Match` opcional | `200` + `ETag` · `400` · `404` · `409` · `412` |
+| `GET` | `/api/departamentos/{id}/consultas?page=&size=` | Consultas recibidas, de la más reciente a la más antigua (paginadas) | `200` · `400` · `404` |
+| `POST` | `/api/departamentos/{id}/consultas` | Registrar una consulta de un interesado | `201` · `400` · `404` · `409` (vendido o repetida) |
+| `POST` | `/api/departamentos/{id}/imagenes` | Subir una foto (`multipart/form-data`, campo `archivo`) ([detalle](arquitectura.md#imágenes-y-minio)) | `201` · `400` · `404` · `409` · `413` · `503` |
+| `DELETE` | `/api/departamentos/{id}/imagenes/{imagenId}` | Eliminar una foto | `204` · `404` · `409` (vendido) |
+| `GET` | `/api/direcciones/autocompletar?q=` | Autocompletado de direcciones ([detalle](arquitectura.md#autocompletado-de-direcciones)) | `200` · `400` |
 
-**Alta / edición** (`DepartamentoRequest`):
+**Alta con fotos**, como pide el enunciado: la parte `departamento` lleva el JSON de abajo y la parte `imagenes` se
+repite por cada foto (hasta 5; JPEG, PNG o WebP de hasta 5 MB cada una; request de hasta 26 MB). Primero se valida
+todo (datos y contenido real de cada archivo), después se suben las fotos y se guarda el departamento con sus
+imágenes en una transacción; si algo falla se borran las fotos ya subidas. Un error de una foto se informa en
+`fieldErrors` con la clave `imagenes[i]`.
 
 ```bash
-curl -i -X POST http://localhost:8080/api/v1/departamentos \
+curl -i -X POST http://localhost:8080/api/departamentos \
+  -F 'departamento={"titulo":"3 ambientes con balcón en Palermo","precio":185000,"moneda":"USD","ambientes":3,"dormitorios":2,"banos":1,"superficieM2":72.5,"direccion":{"calle":"Gorriti","numero":"4850","ciudad":"Ciudad Autónoma de Buenos Aires","provincia":"CABA"}};type=application/json' \
+  -F 'imagenes=@frente.jpg' -F 'imagenes=@living.png'
+# HTTP/1.1 202
+# Location: /api/departamentos/1
+# ETag: "0"
+```
+
+**Alta sin fotos / edición** (`DepartamentoRequest`, JSON):
+
+```bash
+curl -i -X POST http://localhost:8080/api/departamentos \
   -H 'Content-Type: application/json' -H 'X-Request-Id: demo-001' \
   -d '{
     "titulo": "3 ambientes con balcón en Palermo",
@@ -56,8 +102,8 @@ curl -i -X POST http://localhost:8080/api/v1/departamentos \
       "latitud": -34.5889, "longitud": -58.4305
     }
   }'
-# HTTP/1.1 201
-# Location: /api/v1/departamentos/1
+# HTTP/1.1 202
+# Location: /api/departamentos/1
 # ETag: "0"
 ```
 
@@ -74,7 +120,7 @@ curl -i -X POST http://localhost:8080/api/v1/departamentos \
 | `estado` | opcional: en el alta, `DISPONIBLE`; en la edición, si se omite se conserva |
 | `direccion.calle` / `numero` / `ciudad` / `provincia` | obligatorios (≤ 120 / 10 / 80 / 80) |
 | `direccion.piso` / `unidad` / `codigoPostal` / `placeId` | opcionales |
-| `direccion.latitud` / `longitud` | opcionales, **juntas o ninguna**, en rango (±90 / ±180) |
+| `direccion.latitud` / `longitud` | opcionales, **juntas o ninguna**, en rango (±90 / ±180); se guardan redondeadas a 6 decimales (~10 cm), así que se aceptan tal como las devuelve el autocompletado |
 
 Los textos se normalizan (espacios recortados; opcionales vacíos ⇒ `null`). El `codigo` (`DEP-XXXXXXXX`) lo
 genera el backend y no se puede modificar.
@@ -84,7 +130,7 @@ y otro usuario modificó el departamento desde entonces, responde `412 PRECONDIT
 `If-Match`, las escrituras concurrentes que chocan en la base responden `409 CONCURRENT_MODIFICATION`.
 
 ```bash
-curl -i -X PUT http://localhost:8080/api/v1/departamentos/1 \
+curl -i -X PUT http://localhost:8080/api/departamentos/1 \
   -H 'Content-Type: application/json' -H 'If-Match: "0"' -d @departamento.json
 ```
 
@@ -105,14 +151,14 @@ DISPONIBLE ⇄ RESERVADO
 
 **Baja lógica y reactivación**:
 
-- `DELETE /api/v1/departamentos/{id}` no borra el registro: guarda la fecha en `fecha_baja`. Desde ese momento el
+- `DELETE /api/departamentos/{id}` no borra el registro: guarda la fecha en `fecha_baja`. Desde ese momento el
   departamento no aparece en el listado ni cuenta en el total, y no admite cambios: la edición, las fotos, las
   consultas y una segunda baja responden `409 DEPARTAMENTO_DADO_DE_BAJA`. El detalle se sigue leyendo, con
   `fechaBaja`, y el listado lo muestra con `dadosDeBaja=true`.
 - Se conservan el departamento, sus fotos (también en MinIO) y sus consultas, como historial. La dirección queda libre
   para otro aviso.
 - Se puede dar de baja en cualquier estado, también vendido, para sacarlo del listado.
-- `POST /api/v1/departamentos/{id}/reactivacion` lo vuelve a publicar tal como estaba: mismo estado, datos, fotos y
+- `POST /api/departamentos/{id}/reactivacion` lo vuelve a publicar tal como estaba: mismo estado, datos, fotos y
   consultas. Si está disponible o reservado y mientras tanto se publicó otro aviso en su dirección, responde
   `409 AVISO_DUPLICADO`. Si no estaba dado de baja, `409 DEPARTAMENTO_NO_DADO_DE_BAJA`.
 - Baja y reactivación usan `If-Match` como la edición: con una versión desactualizada responden `412` sin cambiar nada,
@@ -144,16 +190,24 @@ DISPONIBLE ⇄ RESERVADO
 no recibe consultas (`409 DEPARTAMENTO_NO_DISPONIBLE`). La respuesta solo incluye `id`, `departamentoId` y
 `createdAt`: nunca devuelve los datos personales.
 
+**Consultas recibidas**: `GET /api/departamentos/{id}/consultas` devuelve las consultas del departamento con los
+datos de contacto (nombre, email, teléfono), el mensaje y la fecha, de la más reciente a la más antigua. Paginado en
+la base con el formato de página del listado (`page` desde 0, `size` de 1 a 50, por defecto 10); el índice
+`ix_consulta_departamento_fecha (departamento_id, created_at DESC, id DESC)` resuelve el filtro y el orden. También
+funciona con un departamento dado de baja (sus consultas se conservan como historial). En el frontend se ven en el
+detalle de cada departamento, debajo del formulario de consulta.
+
 ```bash
-curl -i -X POST http://localhost:8080/api/v1/departamentos/1/consultas \
+curl -i -X POST http://localhost:8080/api/departamentos/1/consultas \
   -H 'Content-Type: application/json' \
   -d '{"nombre":"Ana Pérez","email":"ana@example.com","mensaje":"¿Se puede visitar el sábado?"}'
 ```
 
 **Detalle** (`DepartamentoDetailResponse`): todos los campos anteriores más `id`, `codigo`, `imagenes`
-(`id`, `url`, `contentType`, `sizeBytes`, `posicion`; ordenadas, la primera es la principal), `cantidadConsultas`,
+(`id`, `url`, `contentType`, `sizeBytes`, `posicion`; ordenadas, la primera es la principal), `consultas` (`id`,
+`nombre`, `email`, `telefono`, `mensaje`, `createdAt`; de la más reciente a la más antigua), `cantidadConsultas`,
 `version`, `createdAt`, `updatedAt`. Se arma con **3 sentencias SQL fijas** (departamento por PK, imágenes por FK y
-`COUNT` de consultas), con 0 o 5 fotos: lo verifica `DepartamentoApiIT` con las estadísticas de Hibernate.
+consultas por el índice `ix_consulta_departamento_fecha`), con 0 o 5 fotos: lo verifica `DepartamentoApiIT` con las estadísticas de Hibernate.
 
 ## Errores
 
@@ -166,7 +220,7 @@ Todas las respuestas de error (validación, dominio, Spring MVC, Spring Security
   "status": 400,
   "error": "VALIDATION_ERROR",
   "message": "La solicitud contiene datos inválidos",
-  "path": "/api/v1/departamentos",
+  "path": "/api/departamentos",
   "requestId": "demo-001",
   "fieldErrors": {
     "precio": "debe ser mayor que 0",
@@ -208,7 +262,7 @@ siempre con `errorCode` y `status` como campos estructurados.
 
 ## Listado: paginación, filtros y orden
 
-`GET /api/v1/departamentos` — todo se resuelve en PostgreSQL (filtros, orden, `OFFSET`/`LIMIT`, totales y
+`GET /api/departamentos` — todo se resuelve en PostgreSQL (filtros, orden, `OFFSET`/`LIMIT`, totales y
 agregados); el cliente nunca recibe más que una página.
 
 | Parámetro | Ejemplo | Regla |
@@ -216,21 +270,22 @@ agregados); el cliente nunca recibe más que una página.
 | `q` | `q=balcon` | Texto contenido en el título, sin distinguir mayúsculas ni acentos (`balcon` encuentra `balcón`). 3 a 100 caracteres. `%` y `_` se buscan literalmente |
 | `ciudad` | `ciudad=rosario` | Ciudad exacta, sin distinguir mayúsculas |
 | `estado` | `estado=DISPONIBLE&estado=RESERVADO` o `estado=DISPONIBLE,RESERVADO` | Uno o más de `DISPONIBLE`, `RESERVADO`, `VENDIDO` |
-| `moneda` | `moneda=USD` | `ARS` o `USD`. **Obligatoria si se filtra por precio** (no se comparan montos de distintas monedas) |
+| `disponible` | `disponible=true` | `true`: solo `DISPONIBLE`; `false`: `RESERVADO` y `VENDIDO`. No se combina con `estado` |
+| `moneda` | `moneda=USD` | `ARS` o `USD`. Si se filtra por precio sin `moneda`, el rango es en `USD` (no se comparan montos de distintas monedas) |
 | `precioMin` / `precioMax` | `precioMin=100000&precioMax=200000` | ≥ 0, mínimo ≤ máximo |
 | `superficieMin` / `superficieMax` | `superficieMin=40` | m², ≥ 0, mínimo ≤ máximo |
 | `ambientesMin` / `dormitoriosMin` / `banosMin` | `ambientesMin=3` | Mínimos |
 | `conImagenes` | `conImagenes=true` | `true`: solo con fotos; `false`: solo sin fotos |
 | `dadosDeBaja` | `dadosDeBaja=true` | `true`: solo los dados de baja (para reactivarlos). Sin el parámetro, solo los publicados |
-| `page` | `page=0` | Desde 0. Default 0 |
-| `size` | `size=20` | 1..100. Default 20 |
+| `pagina` | `pagina=0` | Desde 0. Default 0 |
+| `cantidad` | `cantidad=20` | 1..100. Default 20 |
 | `sort` | `sort=precio,asc` | `createdAt` (default, `desc`), `precio` (dentro de cada moneda), `superficieM2`; con `,asc` o `,desc` |
 
-Ventana máxima: `(page + 1) × size ≤ 10.000`. Con `OFFSET`, PostgreSQL recorre y descarta las filas anteriores; más
-allá de esa profundidad se pide refinar los filtros (`400` en `page`).
+Ventana máxima: `(pagina + 1) × cantidad ≤ 10.000`. Con `OFFSET`, PostgreSQL recorre y descarta las filas anteriores; más
+allá de esa profundidad se pide refinar los filtros (`400` en `pagina`).
 
 ```bash
-curl 'http://localhost:8080/api/v1/departamentos?estado=DISPONIBLE&moneda=USD&precioMax=200000&sort=precio,asc&size=2'
+curl 'http://localhost:8080/api/departamentos?disponible=true&precioMax=200000&sort=precio,asc&pagina=0&cantidad=2'
 ```
 
 ```json
@@ -248,9 +303,10 @@ curl 'http://localhost:8080/api/v1/departamentos?estado=DISPONIBLE&moneda=USD&pr
 }
 ```
 
-(Respuesta real con el seed; `content` recortado al primer ítem.) Cada ítem trae solo lo que muestra la tarjeta del listado (sin descripción, dirección completa ni lista de fotos).
+(Ejemplo con el seed; `content` recortado al primer ítem.) Cada ítem trae solo lo que muestra la tarjeta del listado (sin descripción, dirección completa ni lista de fotos).
 `imagenPrincipalUrl` es la foto de menor posición, o `null` si no tiene (el frontend muestra un placeholder). El
-formato de página es el estándar de Spring Data (`PagedModel`).
+formato de página es el estándar de Spring Data (`PagedModel`): `page.number` es la `pagina` pedida y `page.size`, la
+`cantidad`.
 
 ### Cómo se ejecuta (3 consultas fijas por página)
 
@@ -284,7 +340,7 @@ método de consulta abstracto en un repositorio.
   no hay producto fotos × consultas y los conteos son exactos sin `COUNT(DISTINCT ...)`.
 - **Agregados con subconsultas correlacionadas**: la Criteria API estándar no admite tablas derivadas en el
   `FROM`; las subconsultas escalares por fila sí, y con los índices `uk_imagen_departamento_posicion` e
-  `ix_consulta_departamento` cada una es un *index-only scan* sobre las filas de la página (≤ 100). Se cuentan
+  `ix_consulta_departamento_fecha` cada una es un *index-only scan* sobre las filas de la página (≤ 100). Se cuentan
   `posicion` y `departamento_id` (columnas `NOT NULL` del índice) en lugar de `id`, que obligaría a leer cada fila
   de la tabla.
 - **Orden por lista blanca** (`CampoOrden`): ningún nombre de propiedad enviado por el cliente llega a la consulta.
@@ -343,6 +399,7 @@ $P -d lebane_perf < backend/src/main/resources/db/migration/V3__indices_reglas_d
 $P -d lebane_perf < backend/src/main/resources/db/migration/V4__baja_logica.sql
 $P -d lebane_perf < backend/src/main/resources/db/migration/V5__indice_dados_de_baja.sql
 $P -d lebane_perf < backend/src/main/resources/db/migration/V6__busqueda_sin_acentos.sql
+$P -d lebane_perf < backend/src/main/resources/db/migration/V7__indice_consultas_por_departamento.sql
 $P -d lebane_perf < backend/src/test/resources/perf/datos-volumen.sql
 $P -d lebane_perf -c "VACUUM ANALYZE departamento, imagen, consulta"
 $P -d lebane_perf < backend/src/test/resources/perf/explain-listado.sql

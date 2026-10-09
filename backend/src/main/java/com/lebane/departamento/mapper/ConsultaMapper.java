@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import com.lebane.departamento.dto.ConsultaCreatedResponse;
 import com.lebane.departamento.dto.ConsultaRequest;
+import com.lebane.departamento.dto.ConsultaResponse;
 import com.lebane.departamento.entity.Consulta;
 import com.lebane.departamento.entity.Departamento;
 
@@ -20,5 +21,10 @@ public class ConsultaMapper {
 
     public ConsultaCreatedResponse toCreatedResponse(Consulta consulta, Long departamentoId) {
         return new ConsultaCreatedResponse(consulta.getId(), departamentoId, consulta.getCreatedAt());
+    }
+
+    public ConsultaResponse toResponse(Consulta consulta) {
+        return new ConsultaResponse(consulta.getId(), consulta.getNombre(), consulta.getEmail(),
+                consulta.getTelefono(), consulta.getMensaje(), consulta.getCreatedAt());
     }
 }

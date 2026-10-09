@@ -55,7 +55,7 @@ class NonCriticalDependenciesDownIT {
         try {
             // Las dependencias no críticas están efectivamente caídas.
             JsonNode autocompletado = mapper.readTree(
-                    rest.getForObject("/api/v1/direcciones/autocompletar?q=Gorriti 4850", String.class));
+                    rest.getForObject("/api/direcciones/autocompletar?q=Gorriti 4850", String.class));
             assertThat(autocompletado.path("degradado").asBoolean()).isTrue();
 
             for (String probe : new String[] {"/actuator/health/liveness", "/actuator/health/readiness", "/actuator/health"}) {

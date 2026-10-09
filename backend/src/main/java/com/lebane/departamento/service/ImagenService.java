@@ -131,8 +131,16 @@ public class ImagenService {
     }
 
     private ImageType validar(InputStreamSource contenido, long sizeBytes) {
+        return validarArchivo(contenido, sizeBytes, CAMPO_ARCHIVO);
+    }
+
+    /**
+     * Validación de una foto antes de tocar la red: no vacía, tamaño máximo y contenido real (magic bytes) JPEG, PNG
+     * o WebP. {@code campo} es el nombre que se informa en {@code fieldErrors}.
+     */
+    ImageType validarArchivo(InputStreamSource contenido, long sizeBytes, String campo) {
         if (sizeBytes <= 0) {
-            throw new InvalidRequestException(CAMPO_ARCHIVO, "no puede estar vacío");
+            throw new InvalidRequestException(campo, "no puede estar vacío");
         }
         if (sizeBytes > maxFileSize) {
             throw new PayloadTooLargeException("La imagen supera el tamaño máximo de " + (maxFileSize / 1024 / 1024)
@@ -142,10 +150,10 @@ public class ImagenService {
         try (InputStream stream = contenido.getInputStream()) {
             header = stream.readNBytes(ImageType.SIGNATURE_LENGTH);
         } catch (IOException e) {
-            throw new InvalidRequestException(CAMPO_ARCHIVO, "no se pudo leer el archivo");
+            throw new InvalidRequestException(campo, "no se pudo leer el archivo");
         }
         return ImageType.detect(header).orElseThrow(() ->
-                new InvalidRequestException(CAMPO_ARCHIVO, "debe ser una imagen JPEG, PNG o WebP"));
+                new InvalidRequestException(campo, "debe ser una imagen JPEG, PNG o WebP"));
     }
 
     /** Un departamento vendido es un registro cerrado: sus fotos tampoco cambian. */

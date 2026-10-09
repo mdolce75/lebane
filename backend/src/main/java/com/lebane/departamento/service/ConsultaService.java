@@ -7,18 +7,24 @@ import java.time.Duration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.web.PagedModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lebane.departamento.dto.ConsultaCreatedResponse;
 import com.lebane.departamento.dto.ConsultaRequest;
+import com.lebane.departamento.dto.ConsultaResponse;
 import com.lebane.departamento.entity.Consulta;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.mapper.ConsultaMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
+import com.lebane.departamento.repository.ConsultaSpecifications;
 import com.lebane.departamento.repository.DepartamentoRepository;
 import com.lebane.exception.BusinessRuleException;
 import com.lebane.exception.ErrorCode;
+import com.lebane.exception.ResourceNotFoundException;
 
 /**
  * Registro de consultas de interesados. Los datos personales nunca se registran en logs.
@@ -65,5 +71,22 @@ public class ConsultaService {
         Consulta consulta = consultaRepository.saveAndFlush(nueva);
         log.info("Consulta registrada", kv("departamentoId", departamentoId), kv("consultaId", consulta.getId()));
         return mapper.toCreatedResponse(consulta, departamentoId);
+    }
+
+    /**
+     * Consultas recibidas por un departamento, de la más reciente a la más antigua. Paginado en la base con
+     * {@code ix_consulta_departamento_fecha} (filtro y orden por índice; el COUNT no hace JOIN). También para los
+     * dados de baja: sus consultas se conservan como historial.
+     */
+    @Transactional(readOnly = true)
+    public PagedModel<ConsultaResponse> listar(Long departamentoId, int page, int size) {
+        if (!departamentoRepository.existsById(departamentoId)) {
+            throw new ResourceNotFoundException(DepartamentoService.RECURSO);
+        }
+        Page<ConsultaResponse> consultas = consultaRepository
+                .findAll(ConsultaSpecifications.deDepartamento(departamentoId),
+                        PageRequest.of(page, size, ConsultaRepository.RECIENTES))
+                .map(mapper::toResponse);
+        return new PagedModel<>(consultas);
     }
 }

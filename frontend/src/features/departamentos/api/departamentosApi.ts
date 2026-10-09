@@ -4,13 +4,14 @@ import {
   consultaCreadaSchema,
   departamentoDetalleSchema,
   imagenSchema,
+  paginaConsultasSchema,
   paginaSchema,
   type ConsultaPayload,
   type DepartamentoPayload,
 } from './schemas';
 import type { ListadoParams } from '../listado/listadoParams';
 
-const BASE = '/v1/departamentos';
+const BASE = '/departamentos';
 
 /** Filtros, orden y paginación se envían al servidor: el cliente nunca filtra ni pagina en memoria. */
 export async function listarDepartamentos(params: ListadoParams, signal?: AbortSignal) {
@@ -23,11 +24,13 @@ export async function listarDepartamentos(params: ListadoParams, signal?: AbortS
       moneda: params.moneda,
       precioMin: params.precioMin,
       precioMax: params.precioMax,
+      superficieMin: params.superficieMin,
+      superficieMax: params.superficieMax,
       ambientesMin: params.ambientesMin,
       conImagenes: params.conImagenes,
       dadosDeBaja: params.dadosDeBaja,
-      page: params.page,
-      size: params.size,
+      pagina: params.page,
+      cantidad: params.size,
       sort: params.sort,
     },
   });
@@ -38,8 +41,17 @@ export async function obtenerDepartamento(id: number, signal?: AbortSignal) {
   return parseResponse(departamentoDetalleSchema, await http.get<unknown>(`${BASE}/${id}`, { signal }));
 }
 
-export async function crearDepartamento(payload: DepartamentoPayload) {
-  return parseResponse(departamentoDetalleSchema, await http.post<unknown>(BASE, payload));
+/**
+ * Alta con sus fotos en un solo request multipart: la parte `departamento` lleva el JSON y `imagenes` se repite por
+ * cada foto. El backend responde 202 con el departamento creado; si algo falla, no crea nada.
+ */
+export async function crearDepartamento(payload: DepartamentoPayload, imagenes: File[] = []) {
+  const form = new FormData();
+  form.append('departamento', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+  imagenes.forEach((imagen) => form.append('imagenes', imagen));
+  // Con fotos, el request puede tardar más que una consulta: timeout propio.
+  const data = await http.post<unknown>(BASE, form, imagenes.length > 0 ? { timeoutMs: 120_000 } : {});
+  return parseResponse(departamentoDetalleSchema, data);
 }
 
 /** Edición con concurrencia optimista: `If-Match` con la versión leída (412 si otro usuario la modificó). */
@@ -79,4 +91,10 @@ export async function eliminarImagen(departamentoId: number, imagenId: number) {
 
 export async function crearConsulta(departamentoId: number, payload: ConsultaPayload) {
   return parseResponse(consultaCreadaSchema, await http.post<unknown>(`${BASE}/${departamentoId}/consultas`, payload));
+}
+
+/** Consultas recibidas, de la más reciente a la más antigua, paginadas en el servidor. */
+export async function listarConsultas(departamentoId: number, page: number, size: number, signal?: AbortSignal) {
+  const data = await http.get<unknown>(`${BASE}/${departamentoId}/consultas`, { signal, query: { page, size } });
+  return parseResponse(paginaConsultasSchema, data);
 }

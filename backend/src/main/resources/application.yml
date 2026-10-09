@@ -45,8 +45,8 @@ spring:
   servlet:
     multipart:
       max-file-size: ${UPLOAD_MAX_FILE_SIZE:5MB}
-      # Una imagen por request: el request apenas supera al archivo.
-      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:6MB}
+      # El alta admite hasta 5 fotos en el mismo request (5 × 5 MB + los datos); la subida suelta, una.
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:26MB}
 
 server:
   port: ${SERVER_PORT:8080}

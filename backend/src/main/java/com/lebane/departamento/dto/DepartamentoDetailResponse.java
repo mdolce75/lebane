@@ -42,6 +42,8 @@ public record DepartamentoDetailResponse(
         List<ImagenResponse> imagenes,
         @Schema(description = "Cantidad de consultas recibidas", example = "3", requiredMode = Schema.RequiredMode.REQUIRED)
         long cantidadConsultas,
+        @Schema(description = "Consultas recibidas, de la más reciente a la más antigua", requiredMode = Schema.RequiredMode.REQUIRED)
+        List<ConsultaResponse> consultas,
         @Schema(description = "Versión para concurrencia optimista (la misma que el ETag)", example = "0", requiredMode = Schema.RequiredMode.REQUIRED)
         long version,
         @Schema(description = "Fecha de alta (UTC)", example = "2026-10-01T12:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)

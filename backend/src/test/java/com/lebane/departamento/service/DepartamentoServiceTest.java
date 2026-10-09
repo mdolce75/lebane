@@ -29,9 +29,11 @@ import com.lebane.departamento.TestFixtures;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.dto.DireccionRequest;
+import com.lebane.departamento.entity.Consulta;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
+import com.lebane.departamento.mapper.ConsultaMapper;
 import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
 import com.lebane.departamento.repository.DepartamentoRepository;
@@ -65,7 +67,7 @@ class DepartamentoServiceTest {
     @BeforeEach
     void setUp() {
         service = new DepartamentoService(departamentoRepository, imagenRepository, consultaRepository, mapper,
-                codigoGenerator, CLOCK);
+                new ConsultaMapper(), codigoGenerator, CLOCK);
     }
 
     @Test
@@ -94,12 +96,14 @@ class DepartamentoServiceTest {
         Imagen imagen = new Imagen(departamento, "departamentos/5/a.jpg", "image/jpeg", 100, 0);
         when(departamentoRepository.findById(5L)).thenReturn(Optional.of(departamento));
         when(imagenRepository.findByDepartamentoIdOrdered(5L)).thenReturn(List.of(imagen));
-        when(consultaRepository.countByDepartamentoId(5L)).thenReturn(4L);
+        Consulta consulta = new Consulta(departamento, "Ana Pérez", "ana@example.com", null, "¿Sigue disponible?");
+        when(consultaRepository.findByDepartamentoIdRecientes(5L)).thenReturn(List.of(consulta));
 
         DepartamentoDetailResponse response = service.obtenerDetalle(5L);
 
         assertThat(response.imagenes()).hasSize(1);
-        assertThat(response.cantidadConsultas()).isEqualTo(4L);
+        assertThat(response.cantidadConsultas()).isEqualTo(1L);
+        assertThat(response.consultas()).extracting("email").containsExactly("ana@example.com");
         assertThat(response.version()).isEqualTo(2L);
     }
 
@@ -211,7 +215,6 @@ class DepartamentoServiceTest {
 
     @Test
     void crearEnLaDireccionDeOtroPublicadoEsDuplicadoYNoGuardaNada() {
-        when(codigoGenerator.generate()).thenReturn("DEP-ABCDEFGH");
         when(departamentoRepository.exists(cualquierSpec())).thenReturn(true);
 
         assertThatThrownBy(() -> service.crear(TestFixtures.departamento()))

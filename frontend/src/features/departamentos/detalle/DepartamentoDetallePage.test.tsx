@@ -5,8 +5,8 @@ import { detalle, item, pagina } from '../../../test/fixtures';
 import { apiError, mockApi } from '../../../test/mockApi';
 import { jsonResponse, renderRoute } from '../../../test/utils';
 
-const DETALLE = '/api/v1/departamentos/1';
-const CONSULTAS = '/api/v1/departamentos/1/consultas';
+const DETALLE = '/api/departamentos/1';
+const CONSULTAS = '/api/departamentos/1/consultas';
 
 describe('Detalle de departamento', () => {
   it('muestra todos los datos y la galería', async () => {
@@ -35,7 +35,7 @@ describe('Detalle de departamento', () => {
   });
 
   it('informa "no encontrado" ante un 404', async () => {
-    mockApi().on('GET', '/api/v1/departamentos/999', () => apiError(404, 'NOT_FOUND'));
+    mockApi().on('GET', '/api/departamentos/999', () => apiError(404, 'NOT_FOUND'));
 
     renderRoute('/departamentos/999');
 
@@ -84,7 +84,7 @@ describe('Detalle de departamento', () => {
     const api = mockApi()
       .on('GET', DETALLE, detalle({ estado: 'VENDIDO' }))
       .on('DELETE', DETALLE, () => new Response(null, { status: 204 }))
-      .on('GET', '/api/v1/departamentos', pagina([item({ id: 2 })]));
+      .on('GET', '/api/departamentos', pagina([item({ id: 2 })]));
     renderRoute('/departamentos/1');
 
     // También un vendido se puede dar de baja (para sacarlo del listado).
@@ -160,5 +160,38 @@ describe('Detalle de departamento', () => {
 
     expect(await screen.findByText(/Ya hay un departamento publicado en la misma dirección/)).toBeInTheDocument();
     expect(screen.getByText(/Dado de baja el/)).toBeInTheDocument();
+  });
+
+  it('lista las consultas recibidas, paginadas en el servidor', async () => {
+    const consulta = (id: number, nombre: string) => ({
+      id, nombre, email: `${nombre.toLowerCase()}@example.com`, telefono: id === 1 ? '+54 11 5555-0101' : null,
+      mensaje: `Consulta de ${nombre}`, createdAt: '2026-10-01T12:00:00Z',
+    });
+    const api = mockApi()
+      .on('GET', DETALLE, detalle({ cantidadConsultas: 12 }))
+      .on('GET', CONSULTAS, (call: { url: URL }) => jsonResponse(call.url.searchParams.get('page') === '1'
+        ? { content: [consulta(11, 'Zoe')], page: { size: 10, number: 1, totalElements: 11, totalPages: 2 } }
+        : { content: [consulta(1, 'Ana'), consulta(2, 'Beto')], page: { size: 10, number: 0, totalElements: 11, totalPages: 2 } }));
+    renderRoute('/departamentos/1');
+
+    const seccion = await screen.findByRole('region', { name: 'Consultas recibidas' });
+    expect(await within(seccion).findByText('Consulta de Ana')).toBeInTheDocument();
+    expect(within(seccion).getByRole('link', { name: 'ana@example.com' })).toHaveAttribute('href', 'mailto:ana@example.com');
+    expect(within(seccion).getByRole('link', { name: '+54 11 5555-0101' })).toHaveAttribute('href', 'tel:+541155550101');
+    expect(within(seccion).getByText('11 consultas recibidas')).toBeInTheDocument();
+
+    await userEvent.click(within(seccion).getByRole('button', { name: 'Página 2' }));
+    expect(await within(seccion).findByText('Consulta de Zoe')).toBeInTheDocument();
+    expect(api.requests('GET', CONSULTAS).map((c) => c.url.searchParams.get('page'))).toEqual(['0', '1']);
+  });
+
+  it('sin consultas muestra un estado vacío', async () => {
+    mockApi()
+      .on('GET', DETALLE, detalle({ cantidadConsultas: 0 }))
+      .on('GET', CONSULTAS, { content: [], page: { size: 10, number: 0, totalElements: 0, totalPages: 0 } });
+    renderRoute('/departamentos/1');
+
+    const seccion = await screen.findByRole('region', { name: 'Consultas recibidas' });
+    expect(await within(seccion).findByText('Todavía no hay consultas')).toBeInTheDocument();
   });
 });

@@ -144,7 +144,7 @@ class ListadoIT {
     void cityFilterIgnoresCase() {
         long a = crear("Uno", "100", Moneda.USD, 2, "40", EstadoDepartamento.DISPONIBLE, new int[] {}, 0);
 
-        assertThat(ids(new DepartamentoListadoParams(null, ciudad.toUpperCase(), null, null, null, null, null, null,
+        assertThat(ids(new DepartamentoListadoParams(null, ciudad.toUpperCase(), null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null))).containsExactly(a);
     }
 
@@ -311,7 +311,7 @@ class ListadoIT {
         }
 
         DepartamentoListadoParams build() {
-            return new DepartamentoListadoParams(q, ciudad, estado, moneda, precioMin, precioMax, ambientesMin, null,
+            return new DepartamentoListadoParams(q, ciudad, estado, null, moneda, precioMin, precioMax, ambientesMin, null,
                     null, superficieMin, superficieMax, conImagenes, dadosDeBaja, page, size, sort);
         }
     }

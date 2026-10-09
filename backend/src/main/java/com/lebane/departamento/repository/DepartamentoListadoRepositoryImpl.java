@@ -78,7 +78,7 @@ class DepartamentoListadoRepositoryImpl implements DepartamentoListadoRepository
      * escalares correlacionadas cuentan sus fotos y consultas y obtienen la foto principal (la de menor posición).
      *
      * <p>Cada subconsulta se resuelve con un índice ({@code uk_imagen_departamento_posicion} para fotos y foto
-     * principal, {@code ix_consulta_departamento} para consultas) y se evalúa solo para las filas de la página
+     * principal, {@code ix_consulta_departamento_fecha} para consultas) y se evalúa solo para las filas de la página
      * (como máximo 100), así que el costo no depende del tamaño de las tablas. No se hace JOIN entre {@code imagen}
      * y {@code consulta}: sin producto fotos × consultas, los {@code COUNT} son exactos sin {@code DISTINCT}.
      * Como la posición es única por departamento, la foto principal es a lo sumo una.

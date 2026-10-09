@@ -1,5 +1,7 @@
 package com.lebane.address.provider;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -46,10 +48,18 @@ public class ExternalAddressProvider implements AddressProvider {
                 numero,
                 ciudad,
                 provincia,
-                d.ubicacion() != null ? d.ubicacion().lat() : null,
-                d.ubicacion() != null ? d.ubicacion().lon() : null,
+                d.ubicacion() != null ? coordenada(d.ubicacion().lat()) : null,
+                d.ubicacion() != null ? coordenada(d.ubicacion().lon()) : null,
                 placeId,
                 d.nomenclatura());
+    }
+
+    /** Precisión de ~10 cm, la misma con la que se guardan las direcciones. */
+    private static final int DECIMALES_COORDENADA = 6;
+
+    /** Georef informa coordenadas con más decimales de los que se guardan: se entregan ya redondeadas. */
+    private static BigDecimal coordenada(BigDecimal valor) {
+        return valor == null ? null : valor.setScale(DECIMALES_COORDENADA, RoundingMode.HALF_UP);
     }
 
     /** Georef devuelve las calles en mayúsculas ("AV. DEL LIBERTADOR"); se presentan como "Av. Del Libertador". */

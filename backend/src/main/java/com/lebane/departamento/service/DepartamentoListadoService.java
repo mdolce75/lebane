@@ -46,7 +46,7 @@ public class DepartamentoListadoService {
 
     public PagedModel<DepartamentoListItemResponse> listar(DepartamentoListadoParams params) {
         Specification<Departamento> spec = DepartamentoSpecifications.conFiltro(mapper.toFiltro(params));
-        Pageable pageable = PageRequest.of(params.page(), params.size(), CampoOrden.toSort(params.sort()));
+        Pageable pageable = PageRequest.of(params.pagina(), params.cantidad(), CampoOrden.toSort(params.sort()));
 
         List<DepartamentoListadoRow> rows = repository.buscarPagina(spec, pageable);
         Map<Long, DepartamentoAgregados> agregados = rows.isEmpty()

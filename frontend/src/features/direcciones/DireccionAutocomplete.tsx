@@ -7,8 +7,8 @@ type Props = {
 };
 
 /**
- * Búsqueda de direcciones para completar el formulario. Es una ayuda: los campos de dirección siguen siendo
- * editables y, si el proveedor no está disponible (`degradado`), se avisa que se carguen a mano.
+ * Búsqueda de direcciones: elegir una sugerencia completa la dirección del formulario. Si el proveedor no está
+ * disponible (`degradado`) o no hay sugerencias, el formulario permite cargarla a mano.
  */
 export function DireccionAutocomplete({ onSelect }: Props) {
   const [texto, setTexto] = useState('');
@@ -46,7 +46,7 @@ export function DireccionAutocomplete({ onSelect }: Props) {
           if (e.key === 'Escape') setAbierto(false);
         }}
       />
-      <span className="field__hint">Completa calle, número, ciudad, provincia y coordenadas. Podés editarlos.</span>
+      <span className="field__hint">Escribí calle y altura, y elegí una de las sugerencias.</span>
       {mostrarResultados && (
         <div id={listId} className="autocomplete__results" aria-live="polite">
           {isFetching && <p className="muted">Buscando…</p>}

@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe('routing', () => {
   it('la raíz redirige al listado y muestra el indicador de API disponible', async () => {
-    const api = mockApi().on('GET', '/api/v1/departamentos', pagina([item()]));
+    const api = mockApi().on('GET', '/api/departamentos', pagina([item()]));
 
     renderRoute('/');
 

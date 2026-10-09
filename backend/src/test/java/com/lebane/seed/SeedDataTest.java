@@ -47,4 +47,28 @@ class SeedDataTest {
         assertThat(codigos).doesNotHaveDuplicates().allSatisfy(codigo ->
                 assertThat(codigo).matches("^SEED-\\d{4}$"));
     }
+
+    @Test
+    void seedHasTheRequiredVolume() {
+        assertThat(SeedData.departamentos()).hasSize(500);
+    }
+
+    @Test
+    void noTwoSeedsShareAnAddress() {
+        List<String> direcciones = SeedData.departamentos().stream()
+                .map(seed -> seed.datos().direccion())
+                .map(d -> String.join("|", d.calle(), d.numero(), String.valueOf(d.piso()), String.valueOf(d.unidad()),
+                        d.ciudad(), d.provincia()).toLowerCase(java.util.Locale.ROOT))
+                .toList();
+
+        assertThat(direcciones).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void seedCoversEveryStateAndCurrency() {
+        assertThat(SeedData.departamentos()).extracting(seed -> seed.estadoFinal())
+                .contains(com.lebane.departamento.entity.EstadoDepartamento.values());
+        assertThat(SeedData.departamentos()).extracting(seed -> seed.datos().moneda())
+                .contains(com.lebane.departamento.entity.Moneda.values());
+    }
 }

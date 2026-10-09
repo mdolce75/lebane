@@ -139,13 +139,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             }
@@ -168,18 +167,80 @@
           ]
         },
         {
-          "name": "Filtros combinados y orden por precio",
+          "name": "Parámetros del enunciado: pagina, cantidad, disponible y precio",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?ciudad=Ciudad Autónoma de Buenos Aires&estado=DISPONIBLE&moneda=USD&precioMin=50000&precioMax=500000&ambientesMin=2&sort=precio,asc&size=5",
+              "raw": "{{baseUrl}}/api/departamentos?pagina=1&cantidad=5&disponible=true&precioMin=50000&precioMax=300000",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "key": "cantidad",
+                  "value": "5"
+                },
+                {
+                  "key": "disponible",
+                  "value": "true"
+                },
+                {
+                  "key": "precioMin",
+                  "value": "50000"
+                },
+                {
+                  "key": "precioMax",
+                  "value": "300000"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('página 1 de a 5', () => {",
+                  "    pm.expect(body.page.number).to.eql(1);",
+                  "    pm.expect(body.page.size).to.eql(5);",
+                  "    pm.expect(body.content.length).to.be.at.most(5);",
+                  "});",
+                  "pm.test('solo disponibles, en rango, con imagen principal y contadores', () => {",
+                  "    for (const d of body.content) {",
+                  "        pm.expect(d.estado).to.eql('DISPONIBLE');",
+                  "        pm.expect(Number(d.precio)).to.be.within(50000, 300000);",
+                  "        pm.expect(d).to.include.keys('imagenPrincipalUrl', 'cantidadImagenes', 'cantidadConsultas');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtros combinados y orden por precio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/departamentos?ciudad=Ciudad Autónoma de Buenos Aires&estado=DISPONIBLE&moneda=USD&precioMin=50000&precioMax=500000&ambientesMin=2&sort=precio,asc&cantidad=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
                 "departamentos"
               ],
               "query": [
@@ -212,7 +273,7 @@
                   "value": "precio,asc"
                 },
                 {
-                  "key": "size",
+                  "key": "cantidad",
                   "value": "5"
                 }
               ]
@@ -239,18 +300,58 @@
           ]
         },
         {
-          "name": "Búsqueda de texto en el título",
+          "name": "Filtro por superficie mínima y máxima",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?q=ambientes&conImagenes=true",
+              "raw": "{{baseUrl}}/api/departamentos?superficieMin=40&superficieMax=80",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
+                "departamentos"
+              ],
+              "query": [
+                {
+                  "key": "superficieMin",
+                  "value": "40"
+                },
+                {
+                  "key": "superficieMax",
+                  "value": "80"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('todos entre 40 y 80 m²', () => pm.response.json().content.forEach((d) => {",
+                  "    pm.expect(d.superficieM2).to.be.within(40, 80);",
+                  "}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Búsqueda de texto en el título",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/departamentos?q=ambientes&conImagenes=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
                 "departamentos"
               ],
               "query": [
@@ -278,24 +379,27 @@
           ]
         },
         {
-          "name": "Error: rango de precio sin moneda",
+          "name": "Rango de precio sin moneda: se filtra en dólares",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?precioMin=100",
+              "raw": "{{baseUrl}}/api/departamentos?precioMin=100&precioMax=200000",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ],
               "query": [
                 {
                   "key": "precioMin",
                   "value": "100"
+                },
+                {
+                  "key": "precioMax",
+                  "value": "200000"
                 }
               ]
             }
@@ -306,13 +410,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
-                  "pm.test('error VALIDATION_ERROR con el esquema ApiError', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body.error).to.eql('VALIDATION_ERROR');",
-                  "    pm.expect(body).to.include.keys('timestamp', 'status', 'message', 'path', 'requestId');",
-                  "});",
-                  "pm.test('indica el campo', () => pm.expect(pm.response.json().fieldErrors).to.have.property('moneda'));"
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sin moneda, el rango se interpreta en USD', () => {",
+                  "    for (const d of pm.response.json().content) {",
+                  "        pm.expect(d.moneda).to.eql('USD');",
+                  "        pm.expect(Number(d.precio)).to.be.within(100, 200000);",
+                  "    }",
+                  "});"
                 ]
               }
             }
@@ -324,13 +428,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?sort=foo,asc",
+              "raw": "{{baseUrl}}/api/departamentos?sort=foo,asc",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ],
               "query": [
@@ -375,13 +478,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -412,12 +514,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('responde 202 Accepted', () => pm.response.to.have.status(202));",
                   "const body = pm.response.json();",
                   "pm.collectionVariables.set('departamentoId', body.id);",
                   "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
                   "pm.test('Location y ETag', () => {",
-                  "    pm.expect(pm.response.headers.get('Location')).to.match(new RegExp(`/api/v1/departamentos/${body.id}$`));",
+                  "    pm.expect(pm.response.headers.get('Location')).to.match(new RegExp(`/api/departamentos/${body.id}$`));",
                   "    pm.expect(pm.response.headers.get('ETag')).to.match(/^\"\\d+\"$/);",
                   "});",
                   "pm.test('código generado y estado por defecto', () => {",
@@ -435,13 +537,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}"
               ]
@@ -476,13 +577,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -525,13 +625,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -573,13 +672,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -617,13 +715,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/999999999",
+              "raw": "{{baseUrl}}/api/departamentos/999999999",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "999999999"
               ]
@@ -667,13 +764,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}"
               ]
@@ -721,13 +817,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}"
               ]
@@ -771,13 +866,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/imagenes",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "imagenes"
@@ -818,13 +912,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/imagenes",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "imagenes"
@@ -865,13 +958,12 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes/{{imagenId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/imagenes/{{imagenId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "imagenes",
@@ -897,13 +989,12 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes/{{imagenId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/imagenes/{{imagenId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "imagenes",
@@ -945,13 +1036,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/consultas",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/consultas",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "consultas"
@@ -993,13 +1083,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/consultas",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/consultas",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "consultas"
@@ -1048,13 +1137,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}"
               ]
@@ -1068,7 +1156,54 @@
                 "exec": [
                   "pm.test('responde 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
-                  "pm.test('cantidadConsultas = 1', () => pm.expect(pm.response.json().cantidadConsultas).to.eql(1));"
+                  "pm.test('cantidadConsultas = 1', () => pm.expect(pm.response.json().cantidadConsultas).to.eql(1));",
+                  "pm.test('trae la consulta con sus datos', () => {\n    const consultas = pm.response.json().consultas;\n    pm.expect(consultas).to.have.lengthOf(1);\n    pm.expect(consultas[0].email).to.eql(pm.collectionVariables.get('emailConsulta'));\n});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar las consultas recibidas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/consultas?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "departamentos",
+                "{{departamentoId}}",
+                "consultas"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('trae la consulta enviada, con sus datos de contacto', () => {",
+                  "    pm.expect(body.page.totalElements).to.eql(1);",
+                  "    pm.expect(body.content[0].email).to.eql(pm.collectionVariables.get('emailConsulta'));",
+                  "    pm.expect(body.content[0]).to.have.all.keys('id', 'nombre', 'email', 'telefono', 'mensaje', 'createdAt');",
+                  "});"
                 ]
               }
             }
@@ -1095,13 +1230,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}"
               ]
@@ -1145,13 +1279,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}"
               ]
@@ -1194,13 +1327,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/consultas",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/consultas",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "consultas"
@@ -1239,13 +1371,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{departamentoId}}/imagenes",
+              "raw": "{{baseUrl}}/api/departamentos/{{departamentoId}}/imagenes",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{departamentoId}}",
                 "imagenes"
@@ -1291,13 +1422,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/direcciones/autocompletar?q=gorriti&limite=3",
+              "raw": "{{baseUrl}}/api/direcciones/autocompletar?q=gorriti&limite=3",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "direcciones",
                 "autocompletar"
               ],
@@ -1336,13 +1466,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/direcciones/autocompletar?q=go",
+              "raw": "{{baseUrl}}/api/direcciones/autocompletar?q=go",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "direcciones",
                 "autocompletar"
               ],
@@ -1388,18 +1517,17 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?size=1",
+              "raw": "{{baseUrl}}/api/departamentos?cantidad=1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ],
               "query": [
                 {
-                  "key": "size",
+                  "key": "cantidad",
                   "value": "1"
                 }
               ]
@@ -1426,13 +1554,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/no-existe",
+              "raw": "{{baseUrl}}/api/no-existe",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "no-existe"
               ]
             }
@@ -1465,13 +1592,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -1514,13 +1640,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -1550,7 +1675,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('responde 202 Accepted', () => pm.response.to.have.status(202));",
                   "pm.collectionVariables.set('bajaId', pm.response.json().id);",
                   "pm.collectionVariables.set('bajaEtag', pm.response.headers.get('ETag'));"
                 ]
@@ -1569,13 +1694,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}"
               ]
@@ -1609,13 +1733,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}"
               ]
@@ -1639,13 +1762,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}"
               ]
@@ -1671,13 +1793,12 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}"
               ]
@@ -1711,13 +1832,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/consultas",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}/consultas",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}",
                 "consultas"
@@ -1756,13 +1876,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?q=PostmanBaja{{marcaBaja}}",
+              "raw": "{{baseUrl}}/api/departamentos?q=PostmanBaja{{marcaBaja}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ],
               "query": [
@@ -1792,13 +1911,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?q=PostmanBaja{{marcaBaja}}&dadosDeBaja=true",
+              "raw": "{{baseUrl}}/api/departamentos?q=PostmanBaja{{marcaBaja}}&dadosDeBaja=true",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ],
               "query": [
@@ -1842,13 +1960,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos",
+              "raw": "{{baseUrl}}/api/departamentos",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ]
             },
@@ -1868,7 +1985,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('responde 202 Accepted', () => pm.response.to.have.status(202));",
                   "pm.collectionVariables.set('ocupanteId', pm.response.json().id);",
                   "pm.collectionVariables.set('ocupanteEtag', pm.response.headers.get('ETag'));"
                 ]
@@ -1882,13 +1999,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}/reactivacion",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}",
                 "reactivacion"
@@ -1927,13 +2043,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{ocupanteId}}",
+              "raw": "{{baseUrl}}/api/departamentos/{{ocupanteId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{ocupanteId}}"
               ]
@@ -1973,13 +2088,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}/reactivacion",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}",
                 "reactivacion"
@@ -2014,13 +2128,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}/reactivacion",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}",
                 "reactivacion"
@@ -2049,13 +2162,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos/{{bajaId}}/reactivacion",
+              "raw": "{{baseUrl}}/api/departamentos/{{bajaId}}/reactivacion",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos",
                 "{{bajaId}}",
                 "reactivacion"
@@ -2085,13 +2197,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/departamentos?q=PostmanBaja{{marcaBaja}}",
+              "raw": "{{baseUrl}}/api/departamentos?q=PostmanBaja{{marcaBaja}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "v1",
                 "departamentos"
               ],
               "query": [

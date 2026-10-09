@@ -22,7 +22,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
 @RestController
-@RequestMapping(path = "/api/v1/direcciones", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(path = "/api/direcciones", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = OpenApiConfig.TAG_DIRECCIONES)
 public class DireccionController {
 

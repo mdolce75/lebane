@@ -61,6 +61,12 @@ export function FiltrosPanel({ params, onApply, onClear }: Props) {
         <FormField label="Precio máximo" error={errors.precioMax?.message} htmlFor="f-precio-max">
           <input id="f-precio-max" inputMode="decimal" {...register('precioMax')} />
         </FormField>
+        <FormField label="Superficie mínima (m²)" error={errors.superficieMin?.message} htmlFor="f-superficie-min">
+          <input id="f-superficie-min" inputMode="decimal" {...register('superficieMin')} />
+        </FormField>
+        <FormField label="Superficie máxima (m²)" error={errors.superficieMax?.message} htmlFor="f-superficie-max">
+          <input id="f-superficie-max" inputMode="decimal" {...register('superficieMax')} />
+        </FormField>
         <FormField label="Ambientes (mín.)" error={errors.ambientesMin?.message} htmlFor="f-ambientes">
           <input id="f-ambientes" inputMode="numeric" {...register('ambientesMin')} />
         </FormField>

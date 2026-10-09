@@ -109,7 +109,7 @@ class DepartamentoListadoServiceTest {
         when(repository.buscarPagina(any(), any())).thenReturn(List.of());
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
 
-        service.listar(new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null,
+        service.listar(new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, 2, 10, "precio,desc"));
 
         verify(repository).buscarPagina(any(), pageable.capture());
@@ -119,7 +119,7 @@ class DepartamentoListadoServiceTest {
     }
 
     private static DepartamentoListadoParams params(int page, int size) {
-        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null, null,
+        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 page, size, null);
     }
 

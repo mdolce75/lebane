@@ -71,7 +71,7 @@ La primera vez tarda unos minutos más (descarga imágenes y dependencias); desp
 
 | Qué | Dónde |
 |---|---|
-| Aplicación (con 12 departamentos de ejemplo) | http://localhost:3000 |
+| Aplicación (con 500 departamentos de ejemplo) | http://localhost:3000 |
 | API documentada (Swagger UI) | http://localhost:8080/swagger-ui.html |
 | Health / readiness | http://localhost:8080/actuator/health/readiness |
 | Logs en Kibana (opcional) | `LOGSTASH_ENABLED=true` en `.env` y `docker compose --profile observability up -d` → http://localhost:5601 (usuario `elastic`, contraseña `ELASTIC_PASSWORD` del `.env`) |

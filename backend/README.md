@@ -20,7 +20,7 @@ Flyway aplica las migraciones al arrancar.
 | Paquete | Responsabilidad |
 |---|---|
 | `config` | Seguridad (Actuator con HTTP Basic), CORS, auditoría JPA, `@ConfigurationProperties` |
-| `departamento.controller` | `DepartamentoController` (`/api/v1/departamentos`), ETags |
+| `departamento.controller` | `DepartamentoController` (`/api/departamentos`), ETags |
 | `departamento.dto` | Requests/responses (records) y validaciones entre campos (`dto.validation`) |
 | `departamento.entity` | `Departamento` (+ `Direccion` embebida), `Imagen`, `Consulta`; relaciones LAZY, sin colecciones |
 | `departamento.mapper` | Conversión DTO ↔ entidad y normalización de textos |

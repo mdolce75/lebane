@@ -37,14 +37,14 @@ class ListadoParamsValidationTest {
 
     @Test
     void appliesDefaultsAndNormalizesText() {
-        DepartamentoListadoParams params = new DepartamentoListadoParams("  balcón ", "   ", null, null, null, null,
+        DepartamentoListadoParams params = new DepartamentoListadoParams("  balcón ", "   ", null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, " ");
 
         assertThat(params.q()).isEqualTo("balcón");
         assertThat(params.ciudad()).isNull();
         assertThat(params.estado()).isEmpty();
-        assertThat(params.page()).isZero();
-        assertThat(params.size()).isEqualTo(DepartamentoListadoParams.DEFAULT_SIZE);
+        assertThat(params.pagina()).isZero();
+        assertThat(params.cantidad()).isEqualTo(DepartamentoListadoParams.DEFAULT_SIZE);
         assertThat(params.sort()).isEqualTo(CampoOrden.DEFAULT);
         assertThat(validator.validate(params)).isEmpty();
     }
@@ -52,7 +52,7 @@ class ListadoParamsValidationTest {
     @Test
     void acceptsAFullValidQuery() {
         DepartamentoListadoParams params = new DepartamentoListadoParams("balcón", "CABA",
-                List.of(EstadoDepartamento.DISPONIBLE, EstadoDepartamento.RESERVADO), Moneda.USD,
+                List.of(EstadoDepartamento.DISPONIBLE, EstadoDepartamento.RESERVADO), null, Moneda.USD,
                 new BigDecimal("100000"), new BigDecimal("200000"), 2, 1, 1, new BigDecimal("40"),
                 new BigDecimal("90"), true, null, 3, 50, "precio,desc");
 
@@ -61,24 +61,35 @@ class ListadoParamsValidationTest {
 
     @Test
     void rejectsOutOfRangeValues() {
-        DepartamentoListadoParams params = new DepartamentoListadoParams("ab", null, null, null, null, null, 0, -1, 0,
+        DepartamentoListadoParams params = new DepartamentoListadoParams("ab", null, null, null, null, null, null, 0, -1, 0,
                 new BigDecimal("-1"), null, null, null, -1, 101, "titulo,asc");
 
         assertThat(errors(params)).containsOnlyKeys("q", "ambientesMin", "dormitoriosMin", "banosMin",
-                "superficieMin", "page", "size", "sort");
+                "superficieMin", "pagina", "cantidad", "sort");
     }
 
     @Test
-    void precioRequiresMoneda() {
+    void precioSinMonedaSeFiltraEnDolares() {
         DepartamentoListadoParams params = withPrecio(null, new BigDecimal("1000"), null);
 
-        assertThat(errors(params)).containsEntry("moneda", "es obligatoria para filtrar por precio");
+        assertThat(validator.validate(params)).isEmpty();
+        assertThat(params.moneda()).isEqualTo(Moneda.USD);
+        assertThat(withPrecio(null, null, null).moneda()).isNull();
+    }
+
+    @Test
+    void disponibleNoSeCombinaConEstado() {
+        DepartamentoListadoParams ambos = new DepartamentoListadoParams(null, null,
+                List.of(EstadoDepartamento.RESERVADO), true, null, null, null, null, null, null, null, null, null,
+                null, null, null, null);
+
+        assertThat(errors(ambos)).containsOnlyKeys("disponible");
     }
 
     @Test
     void rangesMustNotBeInverted() {
         DepartamentoListadoParams precio = withPrecio(Moneda.USD, new BigDecimal("200"), new BigDecimal("100"));
-        DepartamentoListadoParams superficie = new DepartamentoListadoParams(null, null, null, null, null, null, null,
+        DepartamentoListadoParams superficie = new DepartamentoListadoParams(null, null, null, null, null, null, null, null,
                 null, null, new BigDecimal("90"), new BigDecimal("40"), null, null, null, null, null);
 
         assertThat(errors(precio)).containsOnlyKeys("precioMax");
@@ -91,16 +102,16 @@ class ListadoParamsValidationTest {
         DepartamentoListadoParams tooDeep = page(100, 100);
 
         assertThat(validator.validate(lastAllowed)).isEmpty();
-        assertThat(errors(tooDeep)).containsOnlyKeys("page");
+        assertThat(errors(tooDeep)).containsOnlyKeys("pagina");
     }
 
     private static DepartamentoListadoParams withPrecio(Moneda moneda, BigDecimal min, BigDecimal max) {
-        return new DepartamentoListadoParams(null, null, null, moneda, min, max, null, null, null, null, null, null, null,
+        return new DepartamentoListadoParams(null, null, null, null, moneda, min, max, null, null, null, null, null, null, null,
                 null, null, null);
     }
 
     private static DepartamentoListadoParams page(int page, int size) {
-        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null, null,
+        return new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 page, size, null);
     }
 

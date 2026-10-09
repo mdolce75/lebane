@@ -84,12 +84,18 @@ class DepartamentoMapperTest {
         ReflectionTestUtils.setField(principal, "id", 1L);
         ReflectionTestUtils.setField(segunda, "id", 2L);
 
-        DepartamentoDetailResponse detail = mapper.toDetail(entity, List.of(principal, segunda), 7);
+        List<com.lebane.departamento.dto.ConsultaResponse> consultas = List.of(
+                new com.lebane.departamento.dto.ConsultaResponse(5L, "Ana", "ana@example.com", null, "Hola, ¿sigue?",
+                        java.time.Instant.parse("2026-10-01T12:00:00Z")),
+                new com.lebane.departamento.dto.ConsultaResponse(4L, "Beto", "beto@example.com", null, "¿Expensas?",
+                        java.time.Instant.parse("2026-09-30T12:00:00Z")));
+        DepartamentoDetailResponse detail = mapper.toDetail(entity, List.of(principal, segunda), consultas);
 
         assertThat(detail.id()).isEqualTo(42L);
         assertThat(detail.codigo()).isEqualTo("DEP-TEST0001");
         assertThat(detail.version()).isEqualTo(3L);
-        assertThat(detail.cantidadConsultas()).isEqualTo(7);
+        assertThat(detail.cantidadConsultas()).isEqualTo(2);
+        assertThat(detail.consultas()).extracting("id").containsExactly(5L, 4L);
         assertThat(detail.direccion().ciudad()).isEqualTo("Ciudad Autónoma de Buenos Aires");
         assertThat(detail.imagenes()).extracting("id", "url", "posicion").containsExactly(
                 org.assertj.core.groups.Tuple.tuple(1L, "http://localhost:9000/lebane-images/departamentos/42/a.jpg", 0),
@@ -117,9 +123,9 @@ class DepartamentoMapperTest {
     @Test
     void filtroCollapsesRepeatedStates() {
         var params = new DepartamentoListadoParams(null, null,
-                List.of(EstadoDepartamento.VENDIDO, EstadoDepartamento.VENDIDO), null, null, null, null, null, null,
+                List.of(EstadoDepartamento.VENDIDO, EstadoDepartamento.VENDIDO), null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null);
-        var sinEstados = new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null,
+        var sinEstados = new DepartamentoListadoParams(null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null);
 
         assertThat(mapper.toFiltro(params).estados()).containsExactly(EstadoDepartamento.VENDIDO);

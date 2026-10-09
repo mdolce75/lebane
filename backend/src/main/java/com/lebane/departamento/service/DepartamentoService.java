@@ -3,6 +3,7 @@ package com.lebane.departamento.service;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -12,12 +13,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lebane.departamento.dto.ConsultaResponse;
 import com.lebane.departamento.dto.DepartamentoDetailResponse;
 import com.lebane.departamento.dto.DepartamentoRequest;
 import com.lebane.departamento.entity.Departamento;
 import com.lebane.departamento.entity.Direccion;
 import com.lebane.departamento.entity.EstadoDepartamento;
 import com.lebane.departamento.entity.Imagen;
+import com.lebane.departamento.mapper.ConsultaMapper;
 import com.lebane.departamento.mapper.DepartamentoMapper;
 import com.lebane.departamento.repository.ConsultaRepository;
 import com.lebane.departamento.repository.DepartamentoRepository;
@@ -31,8 +34,8 @@ import com.lebane.exception.ResourceNotFoundException;
 /**
  * Casos de uso de departamentos (alta, edición y detalle). El listado paginado se implementa en la Fase 3.
  *
- * <p>El detalle se arma con una cantidad fija de consultas, independiente de la cantidad de fotos o consultas:
- * departamento por PK, imágenes por FK (ordenadas) y {@code COUNT} de consultas. Sin N+1 ni colecciones en memoria.
+ * <p>El detalle se arma con una cantidad fija de sentencias, independiente de la cantidad de fotos o consultas:
+ * departamento por PK, imágenes por FK (ordenadas) y consultas por FK (las más recientes primero). Sin N+1.
  */
 @Service
 @Transactional(readOnly = true)
@@ -45,33 +48,61 @@ public class DepartamentoService {
     private final ImagenRepository imagenRepository;
     private final ConsultaRepository consultaRepository;
     private final DepartamentoMapper mapper;
+    private final ConsultaMapper consultaMapper;
     private final CodigoDepartamentoGenerator codigoGenerator;
     private final Clock clock;
 
     public DepartamentoService(DepartamentoRepository departamentoRepository, ImagenRepository imagenRepository,
-            ConsultaRepository consultaRepository, DepartamentoMapper mapper,
+            ConsultaRepository consultaRepository, DepartamentoMapper mapper, ConsultaMapper consultaMapper,
             CodigoDepartamentoGenerator codigoGenerator, Clock clock) {
         this.departamentoRepository = departamentoRepository;
         this.imagenRepository = imagenRepository;
         this.consultaRepository = consultaRepository;
         this.mapper = mapper;
+        this.consultaMapper = consultaMapper;
         this.codigoGenerator = codigoGenerator;
         this.clock = clock;
     }
 
     @Transactional
     public DepartamentoDetailResponse crear(DepartamentoRequest request) {
+        return crear(request, List.of());
+    }
+
+    /**
+     * Alta con sus fotos ya subidas al storage: el departamento y las filas de sus imágenes se registran en la misma
+     * transacción (o todo, o nada). Las fotos quedan en el orden recibido; la primera es la principal.
+     */
+    @Transactional
+    public DepartamentoDetailResponse crear(DepartamentoRequest request, List<ImagenSubida> imagenesSubidas) {
+        validarAlta(request);
+        Departamento nuevo = mapper.toNewEntity(request, codigoGenerator.generate());
+        Departamento departamento = departamentoRepository.saveAndFlush(nuevo);
+        List<Imagen> imagenes = new ArrayList<>(imagenesSubidas.size());
+        for (int posicion = 0; posicion < imagenesSubidas.size(); posicion++) {
+            ImagenSubida subida = imagenesSubidas.get(posicion);
+            imagenes.add(new Imagen(departamento, subida.objectKey(), subida.contentType(), subida.sizeBytes(),
+                    posicion));
+        }
+        if (!imagenes.isEmpty()) {
+            imagenRepository.saveAllAndFlush(imagenes);
+        }
+        log.info("Departamento creado", kv("departamentoId", departamento.getId()),
+                kv("codigo", departamento.getCodigo()), kv("imagenes", imagenes.size()));
+        // Recién creado: sin consultas.
+        return mapper.toDetail(departamento, imagenes, List.of());
+    }
+
+    /**
+     * Reglas del alta que no dependen de las fotos: no se publica como vendido ni en la dirección de otro aviso
+     * publicado. Se revisan antes de subir las fotos (para no subirlas en vano) y otra vez dentro de la transacción.
+     */
+    public void validarAlta(DepartamentoRequest request) {
         if (request.estado() != null && !request.estado().admiteAlta()) {
             throw new BusinessRuleException(ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
                     "Un departamento no se puede publicar directamente como vendido");
         }
-        Departamento nuevo = mapper.toNewEntity(request, codigoGenerator.generate());
-        validarDireccionLibre(nuevo.getDireccion(), null);
-        Departamento departamento = departamentoRepository.saveAndFlush(nuevo);
-        log.info("Departamento creado", kv("departamentoId", departamento.getId()),
-                kv("codigo", departamento.getCodigo()));
-        // Recién creado: sin imágenes ni consultas.
-        return mapper.toDetail(departamento, List.of(), 0);
+        validarDireccionLibre(DepartamentoMapper.toDireccion(request.direccion()), null);
     }
 
     /**
@@ -141,8 +172,9 @@ public class DepartamentoService {
 
     private DepartamentoDetailResponse detalle(Departamento departamento) {
         List<Imagen> imagenes = imagenRepository.findByDepartamentoIdOrdered(departamento.getId());
-        long cantidadConsultas = consultaRepository.countByDepartamentoId(departamento.getId());
-        return mapper.toDetail(departamento, imagenes, cantidadConsultas);
+        List<ConsultaResponse> consultas = consultaRepository.findByDepartamentoIdRecientes(departamento.getId())
+                .stream().map(consultaMapper::toResponse).toList();
+        return mapper.toDetail(departamento, imagenes, consultas);
     }
 
     /** Cualquier departamento existente, también dado de baja (el detalle lo muestra para poder reactivarlo). */

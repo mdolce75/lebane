@@ -73,6 +73,7 @@ class SeedConsultasTest {
             primerosMensajes.add(SeedConsultas.para(seed.codigo()).getFirst().mensaje());
         }
         assertThat(cantidades).hasSizeGreaterThan(3);
-        assertThat(primerosMensajes).hasSizeGreaterThan(SeedData.departamentos().size() / 2);
+        // Hay 16 mensajes de ejemplo: con 500 avisos se repiten, pero el primero no es siempre el mismo.
+        assertThat(primerosMensajes).hasSizeGreaterThan(10);
     }
 }

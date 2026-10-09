@@ -37,6 +37,15 @@ export const imagenSchema = z.object({
   posicion: z.number(),
 });
 
+export const consultaSchema = z.object({
+  id: z.number(),
+  nombre: z.string(),
+  email: z.string(),
+  telefono: z.string().nullable(),
+  mensaje: z.string(),
+  createdAt: z.string(),
+});
+
 export const departamentoDetalleSchema = z.object({
   id: z.number(),
   codigo: z.string(),
@@ -52,6 +61,8 @@ export const departamentoDetalleSchema = z.object({
   direccion: direccionSchema,
   imagenes: z.array(imagenSchema),
   cantidadConsultas: z.number(),
+  /** Consultas recibidas, la más reciente primero. */
+  consultas: z.array(consultaSchema),
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -95,11 +106,22 @@ export const consultaCreadaSchema = z.object({
   createdAt: z.string(),
 });
 
+export const paginaConsultasSchema = z.object({
+  content: z.array(consultaSchema),
+  page: z.object({
+    size: z.number(),
+    number: z.number(),
+    totalElements: z.number(),
+    totalPages: z.number(),
+  }),
+});
+
 export type Direccion = z.infer<typeof direccionSchema>;
 export type Imagen = z.infer<typeof imagenSchema>;
 export type DepartamentoDetalle = z.infer<typeof departamentoDetalleSchema>;
 export type DepartamentoItem = z.infer<typeof departamentoItemSchema>;
 export type Pagina = z.infer<typeof paginaSchema>;
+export type Consulta = z.infer<typeof consultaSchema>;
 
 /** Cuerpo de alta y edición (DepartamentoRequest del backend). */
 export type DepartamentoPayload = {

@@ -5,7 +5,7 @@ import { mockApi } from '../../test/mockApi';
 import { renderWithProviders } from '../../test/utils';
 import { DireccionAutocomplete } from './DireccionAutocomplete';
 
-const URL_AUTOCOMPLETE = '/api/v1/direcciones/autocompletar';
+const URL_AUTOCOMPLETE = '/api/direcciones/autocompletar';
 const SUGERENCIA = {
   calle: 'Av Santa Fe', numero: '1860', ciudad: 'Ciudad Autónoma de Buenos Aires', provincia: 'CABA',
   latitud: -34.5958, longitud: -58.3941, placeId: 'georef:1:1860', descripcion: 'AV SANTA FE 1860, CABA',

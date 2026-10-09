@@ -1,6 +1,7 @@
 package com.lebane.seed;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.lebane.departamento.dto.ConsultaRequest;
@@ -11,9 +12,13 @@ import com.lebane.departamento.entity.Moneda;
 
 /**
  * Datos representativos para desarrollo local. Ficticios: no corresponden a personas ni publicaciones reales y no
- * dependen de servicios externos. Las fotos se agregan con la integración de storage (Fase 4).
+ * dependen de servicios externos. Los primeros avisos están escritos a mano; el resto, hasta {@value #TOTAL}, los
+ * genera {@link SeedGenerado}. Las fotos y consultas de ejemplo las agrega {@link DevDataSeeder}.
  */
 final class SeedData {
+
+    /** Cantidad de avisos de prueba. */
+    static final int TOTAL = 500;
 
     record SeedDepartamento(String codigo, DepartamentoRequest datos, List<ConsultaRequest> consultas) {
 
@@ -36,7 +41,21 @@ final class SeedData {
     private SeedData() {
     }
 
+    private static final List<SeedDepartamento> DEPARTAMENTOS = construir();
+
     static List<SeedDepartamento> departamentos() {
+        return DEPARTAMENTOS;
+    }
+
+    private static List<SeedDepartamento> construir() {
+        List<SeedDepartamento> escritos = escritosAMano();
+        List<SeedDepartamento> todos = new ArrayList<>(TOTAL);
+        todos.addAll(escritos);
+        todos.addAll(SeedGenerado.departamentos(escritos.size() + 1, TOTAL));
+        return List.copyOf(todos);
+    }
+
+    private static List<SeedDepartamento> escritosAMano() {
         return List.of(
                 seed("SEED-0001", "Luminoso 3 ambientes con balcón en Palermo",
                         "Frente, piso alto, cocina integrada y balcón corrido. A metros de Plaza Serrano.",

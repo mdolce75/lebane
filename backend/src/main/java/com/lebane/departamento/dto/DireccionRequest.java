@@ -30,10 +30,19 @@ public record DireccionRequest(
         @Size(max = 10) @Pattern(regexp = "^[A-Za-z0-9 ]*$", message = "solo admite letras, números y espacios")
         @Schema(description = "Código postal (letras, números y espacios)", example = "C1414")
         String codigoPostal,
-        @Schema(description = "Latitud (WGS84, hasta 6 decimales). Requiere longitud", example = "-34.588900")
-        @DecimalMin("-90") @DecimalMax("90") @Digits(integer = 3, fraction = 6) BigDecimal latitud,
-        @Schema(description = "Longitud (WGS84, hasta 6 decimales). Requiere latitud", example = "-58.430100")
-        @DecimalMin("-180") @DecimalMax("180") @Digits(integer = 3, fraction = 6) BigDecimal longitud,
+        @Schema(description = "Latitud (WGS84). Se guarda redondeada a 6 decimales (~10 cm). Requiere longitud", example = "-34.588900")
+        @DecimalMin("-90") @DecimalMax("90") @Digits(integer = 3, fraction = MAX_DECIMALES_COORDENADA) BigDecimal latitud,
+        @Schema(description = "Longitud (WGS84). Se guarda redondeada a 6 decimales (~10 cm). Requiere latitud", example = "-58.430100")
+        @DecimalMin("-180") @DecimalMax("180") @Digits(integer = 3, fraction = MAX_DECIMALES_COORDENADA) BigDecimal longitud,
         @Schema(description = "Identificador de la sugerencia del autocompletado de la que proviene la dirección, si se eligió una", example = "georef:0209801005940:4850")
         @Size(max = 200) String placeId) {
+
+    /**
+     * Decimales aceptados en las coordenadas. Los proveedores de direcciones (p. ej. Georef) devuelven más de los 6
+     * que se guardan: se aceptan y se redondean al persistir ({@link #ESCALA_COORDENADA}), para que elegir una
+     * sugerencia del autocompletado nunca impida guardar.
+     */
+    public static final int MAX_DECIMALES_COORDENADA = 15;
+    /** Decimales con los que se guardan las coordenadas (~10 cm de precisión). */
+    public static final int ESCALA_COORDENADA = 6;
 }

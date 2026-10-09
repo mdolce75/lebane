@@ -71,8 +71,9 @@ public class OpenApiConfig {
             backend genera uno. La respuesta siempre lo devuelve y queda en todos los logs del request.
             - **Concurrencia optimista**: el detalle, el alta y la edición devuelven `ETag` con la versión del \
             departamento. Enviarlo en `If-Match` al editar evita pisar cambios de otro usuario (412 si cambió).
-            - **Paginación**: `page` (desde 0) y `size` (1 a 100), con una ventana máxima de 10.000 resultados por \
-            búsqueda. La respuesta usa el formato estándar de Spring Data (`content` + `page`).
+            - **Paginación**: en el listado de departamentos, `pagina` (desde 0) y `cantidad` (1 a 100), con una \
+            ventana máxima de 10.000 resultados por búsqueda; en las consultas de un departamento, `page` y `size`. \
+            La respuesta usa el formato estándar de Spring Data (`content` + `page`).
             - **Disponibilidad**: si una dependencia no crítica falla (storage de imágenes, proveedor de \
             direcciones), solo se degradan las operaciones que la usan: 503 `STORAGE_UNAVAILABLE` al subir fotos, \
             respuesta `degradado: true` en el autocompletado. El resto de la API sigue funcionando.
@@ -86,7 +87,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Lebane API")
-                        // Versión del contrato (la del path /api/v1), no la del artefacto: el spec versionado no
+                        // Versión del contrato, no la del artefacto: el spec versionado no
                         // cambia con cada build.
                         .version("v1")
                         .description(DESCRIPCION))
@@ -152,65 +153,65 @@ public class OpenApiConfig {
         errores.put("BadRequest", error("Datos inválidos: body, parámetros o archivo. Cada campo con error se "
                         + "detalla en `fieldErrors`.",
                 ejemplo("validacion", "Validación de campos", 400, ErrorCode.VALIDATION_ERROR,
-                        "La solicitud contiene datos inválidos", "/api/v1/departamentos",
+                        "La solicitud contiene datos inválidos", "/api/departamentos",
                         Map.of("titulo", "no debe estar vacío", "dormitorios",
                                 "debe ser menor que la cantidad de ambientes")),
                 ejemplo("json", "JSON mal formado", 400, ErrorCode.BAD_REQUEST,
-                        "El cuerpo de la solicitud no es JSON válido", "/api/v1/departamentos", Map.of())));
+                        "El cuerpo de la solicitud no es JSON válido", "/api/departamentos", Map.of())));
         errores.put("NotFound", error("El recurso no existe.",
                 ejemplo("departamento", "Departamento inexistente", 404, ErrorCode.NOT_FOUND,
-                        "No se encontró el departamento solicitado", "/api/v1/departamentos/999", Map.of())));
+                        "No se encontró el departamento solicitado", "/api/departamentos/999", Map.of())));
         errores.put("Conflict", error("La operación entra en conflicto con el estado actual (ver `error`).",
                 ejemplo("limite", "Límite de fotos alcanzado", 409, ErrorCode.LIMITE_IMAGENES_ALCANZADO,
-                        "El departamento ya tiene el máximo de 5 fotos", "/api/v1/departamentos/7/imagenes",
+                        "El departamento ya tiene el máximo de 5 fotos", "/api/departamentos/7/imagenes",
                         Map.of()),
                 ejemplo("vendido", "Departamento vendido", 409, ErrorCode.DEPARTAMENTO_NO_DISPONIBLE,
                         "El departamento ya no está disponible y no recibe nuevas consultas",
-                        "/api/v1/departamentos/7/consultas", Map.of()),
+                        "/api/departamentos/7/consultas", Map.of()),
                 ejemplo("vendidoNoModificable", "Departamento vendido: no se modifica", 409,
                         ErrorCode.DEPARTAMENTO_NO_DISPONIBLE, "El departamento ya fue vendido y no se puede modificar",
-                        "/api/v1/departamentos/7", Map.of()),
+                        "/api/departamentos/7", Map.of()),
                 ejemplo("transicion", "Cambio de estado no permitido", 409, ErrorCode.TRANSICION_DE_ESTADO_INVALIDA,
-                        "Un departamento no se puede publicar directamente como vendido", "/api/v1/departamentos",
+                        "Un departamento no se puede publicar directamente como vendido", "/api/departamentos",
                         Map.of()),
                 ejemplo("avisoDuplicado", "Departamento duplicado", 409, ErrorCode.AVISO_DUPLICADO,
                         "Ya hay un departamento publicado en la misma dirección (calle, número, piso y unidad)",
-                        "/api/v1/departamentos", Map.of()),
+                        "/api/departamentos", Map.of()),
                 ejemplo("consultaDuplicada", "Consulta duplicada", 409, ErrorCode.CONSULTA_DUPLICADA,
                         "Ya recibimos una consulta con este email por este departamento en las últimas 24 horas",
-                        "/api/v1/departamentos/7/consultas", Map.of()),
+                        "/api/departamentos/7/consultas", Map.of()),
                 ejemplo("dadoDeBaja", "Departamento dado de baja", 409, ErrorCode.DEPARTAMENTO_DADO_DE_BAJA,
                         "El departamento está dado de baja: hay que reactivarlo para modificarlo",
-                        "/api/v1/departamentos/7", Map.of()),
+                        "/api/departamentos/7", Map.of()),
                 ejemplo("noDadoDeBaja", "Reactivar uno publicado", 409, ErrorCode.DEPARTAMENTO_NO_DADO_DE_BAJA,
-                        "El departamento no está dado de baja", "/api/v1/departamentos/7/reactivacion", Map.of()),
+                        "El departamento no está dado de baja", "/api/departamentos/7/reactivacion", Map.of()),
                 ejemplo("concurrencia", "Modificación simultánea", 409, ErrorCode.CONCURRENT_MODIFICATION,
                         "El recurso fue modificado por otra operación; recargalo y volvé a intentar",
-                        "/api/v1/departamentos/7", Map.of())));
+                        "/api/departamentos/7", Map.of())));
         errores.put("PreconditionFailed", error("`If-Match` no coincide con la versión actual: otro usuario "
                         + "modificó el recurso desde la lectura. Volver a leerlo (GET) y reintentar.",
                 ejemplo("version", "Versión desactualizada", 412, ErrorCode.PRECONDITION_FAILED,
                         "El recurso fue modificado desde la última lectura; recargalo y volvé a intentar",
-                        "/api/v1/departamentos/7", Map.of())));
+                        "/api/departamentos/7", Map.of())));
         errores.put("PayloadTooLarge", error("El archivo o el request supera el tamaño máximo.",
                 ejemplo("imagen", "Imagen demasiado grande", 413, ErrorCode.PAYLOAD_TOO_LARGE,
-                        "La imagen supera el tamaño máximo de 5 MB", "/api/v1/departamentos/7/imagenes", Map.of())));
+                        "La imagen supera el tamaño máximo de 5 MB", "/api/departamentos/7/imagenes", Map.of())));
         errores.put("UnsupportedMediaType", error("`Content-Type` no admitido por el endpoint.",
                 ejemplo("tipo", "Tipo de contenido no soportado", 415, ErrorCode.UNSUPPORTED_MEDIA_TYPE,
-                        "Tipo de contenido no soportado", "/api/v1/departamentos", Map.of())));
+                        "Tipo de contenido no soportado", "/api/departamentos", Map.of())));
         errores.put("InternalError", error("Error inesperado. El mensaje es genérico; el `requestId` permite "
                         + "encontrar el detalle en los logs.",
                 ejemplo("inesperado", "Error inesperado", 500, ErrorCode.INTERNAL_ERROR,
-                        "Ocurrió un error inesperado; si persiste, informá el requestId", "/api/v1/departamentos",
+                        "Ocurrió un error inesperado; si persiste, informá el requestId", "/api/departamentos",
                         Map.of())));
         errores.put("ServiceUnavailable", error("Una dependencia necesaria no está disponible (base de datos o, al "
                         + "subir fotos, el storage). Reintentar más tarde.",
                 ejemplo("base", "Base de datos no disponible", 503, ErrorCode.SERVICE_UNAVAILABLE,
-                        "El servicio no está disponible temporalmente; intentá nuevamente", "/api/v1/departamentos",
+                        "El servicio no está disponible temporalmente; intentá nuevamente", "/api/departamentos",
                         Map.of()),
                 ejemplo("storage", "Storage de imágenes no disponible", 503, ErrorCode.STORAGE_UNAVAILABLE,
                         "El servicio de imágenes no está disponible; intentá nuevamente en unos minutos",
-                        "/api/v1/departamentos/7/imagenes", Map.of())));
+                        "/api/departamentos/7/imagenes", Map.of())));
         errores.values().forEach(OpenApiConfig::agregarHeaderRequestId);
         return errores;
     }

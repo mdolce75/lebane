@@ -15,13 +15,14 @@ import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Query params de {@code GET /api/v1/departamentos}. Todos opcionales; los textos se normalizan (sin espacios
+ * Query params de {@code GET /api/departamentos}. Todos opcionales; los textos se normalizan (sin espacios
  * sobrantes, vacío = sin filtro) antes de validar.
  *
  * @param q       texto contenido en el título (3 a 100 caracteres: con menos, un índice de trigramas no sirve)
- * @param estado  uno o más estados ({@code estado=DISPONIBLE&estado=RESERVADO} o separados por coma)
- * @param page    página, desde 0
- * @param size    tamaño de página, 1..{@value #MAX_SIZE}
+ * @param estado      uno o más estados ({@code estado=DISPONIBLE&estado=RESERVADO} o separados por coma)
+ * @param disponible  atajo del enunciado: {@code true} = solo disponibles; {@code false} = reservados o vendidos
+ * @param pagina      página, desde 0
+ * @param cantidad    tamaño de página, 1..{@value #MAX_SIZE}
  * @param sort    {@code createdAt|precio|superficieM2}, opcionalmente {@code ,asc|,desc}
  */
 @ListadoParamsValidos
@@ -35,11 +36,13 @@ public record DepartamentoListadoParams(
         @Size(max = 80) String ciudad,
         @Schema(description = "Estados a incluir; repetir el parámetro para varios (estado=DISPONIBLE&estado=RESERVADO)")
         List<EstadoDepartamento> estado,
-        @Schema(description = "Moneda. Obligatoria si se filtra por precio (ARS y USD no son comparables)")
+        @Schema(description = "true: solo los disponibles; false: solo los reservados o vendidos. No se combina con estado")
+        Boolean disponible,
+        @Schema(description = "Moneda del filtro de precio (ARS y USD no son comparables). Si se filtra por precio sin indicarla, se usa USD")
         Moneda moneda,
-        @Schema(description = "Precio mínimo (requiere moneda)")
+        @Schema(description = "Precio mínimo, en la moneda indicada (USD si no se indica)")
         @PositiveOrZero BigDecimal precioMin,
-        @Schema(description = "Precio máximo (requiere moneda; mayor o igual que precioMin)")
+        @Schema(description = "Precio máximo, en la moneda indicada (USD si no se indica); mayor o igual que precioMin")
         @PositiveOrZero BigDecimal precioMax,
         @Schema(description = "Ambientes mínimos")
         @Min(1) @Max(20) Integer ambientesMin,
@@ -55,10 +58,10 @@ public record DepartamentoListadoParams(
         Boolean conImagenes,
         @Schema(description = "true: solo los dados de baja (para reactivarlos); omitido o false: solo los publicados")
         Boolean dadosDeBaja,
-        @Schema(description = "Página, desde 0. (page + 1) × size no puede superar 10.000", example = "0", defaultValue = "0")
-        @Min(0) Integer page,
-        @Schema(description = "Tamaño de página", example = "20", defaultValue = "20")
-        @Min(1) @Max(MAX_SIZE) Integer size,
+        @Schema(description = "Página, desde 0. (pagina + 1) × cantidad no puede superar 10.000", example = "0", defaultValue = "0")
+        @Min(0) Integer pagina,
+        @Schema(description = "Cantidad de departamentos por página", example = "20", defaultValue = "20")
+        @Min(1) @Max(MAX_SIZE) Integer cantidad,
         @Pattern(regexp = CampoOrden.PATTERN, message = "debe ser createdAt, precio o superficieM2, con ,asc o ,desc opcional")
         @Schema(description = "Orden: createdAt, precio o superficieM2, con ,asc o ,desc. El precio se ordena dentro de cada moneda; siempre se desempata por id", defaultValue = "createdAt,desc")
         String sort) {
@@ -75,8 +78,13 @@ public record DepartamentoListadoParams(
         q = normalizar(q);
         ciudad = normalizar(ciudad);
         estado = estado == null ? List.of() : estado.stream().filter(e -> e != null).toList();
-        page = page == null ? 0 : page;
-        size = size == null ? DEFAULT_SIZE : size;
+        pagina = pagina == null ? 0 : pagina;
+        cantidad = cantidad == null ? DEFAULT_SIZE : cantidad;
+        // ARS y USD no son comparables: un filtro de precio sin moneda se interpreta en USD, la moneda habitual de
+        // las publicaciones de venta.
+        if (moneda == null && (precioMin != null || precioMax != null)) {
+            moneda = Moneda.USD;
+        }
         sort = normalizar(sort) == null ? CampoOrden.DEFAULT : sort.strip();
     }
 

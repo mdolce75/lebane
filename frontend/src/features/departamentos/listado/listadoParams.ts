@@ -18,6 +18,8 @@ export type ListadoParams = {
   moneda?: Moneda;
   precioMin?: number;
   precioMax?: number;
+  superficieMin?: number;
+  superficieMax?: number;
   ambientesMin?: number;
   conImagenes?: boolean;
   /** true: solo los dados de baja (para reactivarlos). Sin el parámetro, solo los publicados. */
@@ -50,6 +52,8 @@ const urlSchema = z.object({
   moneda: monedaSchema.optional().catch(undefined),
   precioMin: optionalAmount,
   precioMax: optionalAmount,
+  superficieMin: optionalAmount,
+  superficieMax: optionalAmount,
   ambientesMin: optionalNumber(1),
   conImagenes: z.enum(['true', 'false']).transform((v) => v === 'true').optional().catch(undefined),
   dadosDeBaja: z.literal('true').transform(() => true as const).optional().catch(undefined),
@@ -78,6 +82,12 @@ export function parseListadoParams(search: URLSearchParams): ListadoParams {
   if (params.precioMin !== undefined && params.precioMax !== undefined && params.precioMin > params.precioMax) {
     params.precioMax = undefined;
   }
+  if (
+    params.superficieMin !== undefined && params.superficieMax !== undefined &&
+    params.superficieMin > params.superficieMax
+  ) {
+    params.superficieMax = undefined;
+  }
   params.page = Math.min(params.page, maxPage(params.size));
   return params;
 }
@@ -94,6 +104,8 @@ export function toSearchParams(params: Partial<ListadoParams>): URLSearchParams 
   set('moneda', params.moneda);
   set('precioMin', params.precioMin);
   set('precioMax', params.precioMax);
+  set('superficieMin', params.superficieMin);
+  set('superficieMax', params.superficieMax);
   set('ambientesMin', params.ambientesMin);
   set('conImagenes', params.conImagenes);
   set('dadosDeBaja', params.dadosDeBaja);
@@ -111,6 +123,7 @@ export function maxPage(size: number): number {
 export function hasActiveFilters(params: ListadoParams): boolean {
   return Boolean(
     params.q || params.ciudad || params.estado.length || params.moneda || params.ambientesMin ||
+      params.superficieMin !== undefined || params.superficieMax !== undefined ||
       params.conImagenes !== undefined || params.dadosDeBaja,
   );
 }

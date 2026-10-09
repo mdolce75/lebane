@@ -5,7 +5,7 @@ import { item, pagina } from '../../../test/fixtures';
 import { apiError, mockApi, type RecordedCall } from '../../../test/mockApi';
 import { jsonResponse, renderRoute } from '../../../test/utils';
 
-const LISTADO = '/api/v1/departamentos';
+const LISTADO = '/api/departamentos';
 
 describe('Listado de departamentos', () => {
   it('muestra la página que devuelve el servidor con sus datos', async () => {
@@ -21,15 +21,15 @@ describe('Listado de departamentos', () => {
     expect(within(card).getByText('0 fotos · 3 consultas')).toBeInTheDocument();
 
     const [request] = api.requests('GET', LISTADO);
-    expect(request?.url.searchParams.get('page')).toBe('0');
-    expect(request?.url.searchParams.get('size')).toBe('12');
+    expect(request?.url.searchParams.get('pagina')).toBe('0');
+    expect(request?.url.searchParams.get('cantidad')).toBe('12');
     expect(request?.url.searchParams.get('sort')).toBe('createdAt,desc');
     expect(request?.headers.get('X-Request-Id')).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('pagina en el servidor: cambiar de página es un request nuevo', async () => {
     const api = mockApi().on('GET', LISTADO, (call: { url: URL }) => {
-      const page = Number(call.url.searchParams.get('page'));
+      const page = Number(call.url.searchParams.get('pagina'));
       return new Response(JSON.stringify(pagina([item({ id: page + 1, titulo: `Depto página ${page + 1}` })],
         { number: page, size: 12, totalElements: 30, totalPages: 3 })), { headers: { 'Content-Type': 'application/json' } });
     });
@@ -39,7 +39,7 @@ describe('Listado de departamentos', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Página 2' }));
 
     expect(await screen.findByText('Depto página 2')).toBeInTheDocument();
-    expect(api.requests('GET', LISTADO).map((c) => c.url.searchParams.get('page'))).toEqual(['0', '1']);
+    expect(api.requests('GET', LISTADO).map((c) => c.url.searchParams.get('pagina'))).toEqual(['0', '1']);
   });
 
   it('envía filtros y orden al servidor (no filtra en el cliente)', async () => {

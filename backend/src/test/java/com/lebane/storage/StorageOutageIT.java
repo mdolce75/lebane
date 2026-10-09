@@ -94,9 +94,9 @@ class StorageOutageIT {
                 .isLessThan(1_000);
 
         // El resto de la aplicación sigue atendiendo.
-        assertThat(rest.getForEntity("/api/v1/departamentos/" + id, String.class).getStatusCode())
+        assertThat(rest.getForEntity("/api/departamentos/" + id, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
-        assertThat(rest.getForEntity("/api/v1/departamentos?size=1", String.class).getStatusCode())
+        assertThat(rest.getForEntity("/api/departamentos?cantidad=1", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
         ResponseEntity<String> readiness = rest.getForEntity("/actuator/health/readiness", String.class);
         assertThat(readiness.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -113,7 +113,7 @@ class StorageOutageIT {
         headers.setContentType(MediaType.APPLICATION_JSON);
         String body = TestFixtures.departamentoJson().replace("3 ambientes en Palermo",
                 "Outage " + UUID.randomUUID().toString().substring(0, 8));
-        return objectMapper.readTree(rest.exchange("/api/v1/departamentos", HttpMethod.POST,
+        return objectMapper.readTree(rest.exchange("/api/departamentos", HttpMethod.POST,
                 new HttpEntity<>(body, headers), String.class).getBody()).path("id").asLong();
     }
 
@@ -127,7 +127,7 @@ class StorageOutageIT {
         });
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        return rest.exchange("/api/v1/departamentos/" + id + "/imagenes", HttpMethod.POST,
+        return rest.exchange("/api/departamentos/" + id + "/imagenes", HttpMethod.POST,
                 new HttpEntity<>(form, headers), String.class);
     }
 }
