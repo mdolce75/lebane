@@ -43,9 +43,9 @@ cd frontend && npm run test:coverage   # v8 -> frontend/coverage/index.html
 
 | Suite | Tests | Líneas | Ramas |
 |---|---|---|---|
-| Backend (unitarios + IT) | 298 (250 + 48) | 93,6 % | 76,9 % |
-| Frontend (Vitest) | 105 | 96,4 % | 89,9 % |
-| E2E (Playwright, stack real) | 7 | — | — |
+| Backend (unitarios + IT) | 335 (277 + 58) | 94,0 % | 77,8 % |
+| Frontend (Vitest) | 119 | 96,8 % | 87,8 % |
+| E2E (Playwright, stack real) | 8 | — | — |
 
 La cobertura se mide y se publica, pero no se impone un umbral que haga fallar el build: un porcentaje mínimo
 empuja a escribir tests para subir el número y no para cubrir riesgos. Lo que queda sin cubrir en el backend es,
@@ -53,11 +53,11 @@ sobre todo, `equals`/`hashCode` de entidades, ramas de logging en DEBUG y ramas 
 
 ### E2E (Playwright)
 
-Siete escenarios en Chrome contra nginx + backend + PostgreSQL + MinIO reales, sin mocks: filtros y orden enviados
+Ocho escenarios en Chrome contra nginx + backend + PostgreSQL + MinIO reales, sin mocks: filtros y orden enviados
 al servidor con el estado en la URL (incluida la recarga), `X-Request-Id` enviado y devuelto, alta con una foto que
 se sube a MinIO y el navegador descarga y decodifica, rechazo de un archivo falso `.jpg` (en el navegador y en la
-API), consulta reflejada en el contador del listado, pantallas de no encontrado, y conflicto de edición 412 →
-recargar → guardar sin pisar el cambio ajeno. Usan el Chrome instalado (sin `npx playwright install`) y datos con
+API), consulta reflejada en el contador del listado, pantallas de no encontrado, conflicto de edición 412 →
+recargar → guardar sin pisar el cambio ajeno, y baja con confirmación, búsqueda con su filtro y reactivación. Usan el Chrome instalado (sin `npx playwright install`) y datos con
 un prefijo único por ejecución. Detalles en [frontend/README.md](../frontend/README.md#e2e-playwright).
 
 | Test | Verifica |

@@ -14,18 +14,42 @@ El foco no está en la cantidad de features sino en **cómo se resuelve cada una
 validado con 100.000 filas, resiliencia probada con caídas reales de las dependencias, contrato OpenAPI que no
 puede desactualizarse, y CI con tests de integración y E2E contra el stack completo.
 
-![Listado de departamentos](docs/img/listado.png)
+![Listado de departamentos filtrado por superficie](docs/img/listado.png)
 
 <table>
   <tr>
     <td><img src="docs/img/detalle.png" alt="Detalle de un departamento"></td>
-    <td><img src="docs/img/swagger.png" alt="Documentación OpenAPI en Swagger UI"></td>
+    <td><img src="docs/img/consultas.png" alt="Consultas recibidas en el detalle"></td>
   </tr>
   <tr>
     <td align="center">Detalle con galería y datos</td>
+    <td align="center">Consultas recibidas, de la más reciente a la más antigua</td>
+  </tr>
+  <tr>
+    <td><img src="docs/img/alta.png" alt="Alta de un departamento con autocompletado de direcciones"></td>
+    <td><img src="docs/img/swagger.png" alt="Documentación OpenAPI en Swagger UI"></td>
+  </tr>
+  <tr>
+    <td align="center">Alta con autocompletado de direcciones</td>
     <td align="center">API documentada con OpenAPI 3.1 (Swagger UI)</td>
   </tr>
 </table>
+
+## Qué se puede hacer
+
+- **Listado** paginado con filtros por texto (sin distinguir mayúsculas ni acentos: `balcon` encuentra `balcón`),
+  ciudad, disponibilidad o estado, rango de precio, **rango de superficie (m²)**, ambientes y fotos, y orden por
+  fecha, precio o superficie. El estado queda en la URL, así que se puede compartir o recargar.
+- **Alta con fotos en un solo request** (`multipart/form-data`, hasta 5 fotos, todo o nada) y autocompletado de
+  direcciones.
+- **Detalle** con galería, datos, mapa y las **consultas recibidas** (nombre, email, teléfono, mensaje y fecha).
+- **Consultas** de interesados desde el detalle.
+- **Edición** con concurrencia optimista (`ETag` / `If-Match`) y **baja lógica** con reactivación, sin perder el
+  historial de consultas.
+
+La API respeta tal cual el contrato del enunciado (`/api/departamentos`, `pagina`, `cantidad`, `disponible`,
+`precioMin`, `precioMax`, alta `202` con sus imágenes); todo lo demás es agregado y está justificado en
+[docs/api.md](docs/api.md#contrato-del-enunciado).
 
 ---
 
@@ -91,8 +115,9 @@ Sin Docker, con variables de entorno, perfil de observabilidad y todas las opcio
 
 ## Recorrido sugerido (10 minutos)
 
-1. **Usar la app**: filtrar y ordenar el listado (el estado queda en la URL, se puede compartir o recargar),
-   crear un departamento con fotos, enviar una consulta.
+1. **Usar la app**: filtrar y ordenar el listado (por ejemplo, por superficie mínima y máxima; el estado queda en
+   la URL), crear un departamento con fotos, enviar una consulta y verla en **Consultas recibidas** del detalle,
+   dar de baja un departamento y reactivarlo.
 2. **Probar la concurrencia optimista**: abrir la edición de un departamento en dos pestañas y guardar en
    ambas. La segunda recibe **412** y ofrece recargar, sin pisar los cambios de la primera.
 3. **Romper una dependencia**: `docker compose stop minio`. Subir una foto responde 503 con un mensaje claro y,
@@ -154,9 +179,9 @@ flowchart LR
 
 | | Tests | Cobertura de líneas |
 |---|---|---|
-| Backend | 250 unitarios + 48 de integración (PostgreSQL y MinIO reales con Testcontainers) | 94 % (JaCoCo) |
-| Frontend | 105 (Vitest + Testing Library) | 96 % (v8) |
-| E2E | 7 escenarios en Chromium contra el stack completo | — |
+| Backend | 277 unitarios + 58 de integración (PostgreSQL y MinIO reales con Testcontainers) | 94 % (JaCoCo) |
+| Frontend | 119 (Vitest + Testing Library) | 97 % (v8) |
+| E2E | 8 escenarios en Chromium contra el stack completo | — |
 
 El **CI** ([GitHub Actions](.github/workflows/ci.yml)) corre todo en cada PR, incluidos los E2E con
 `docker compose up`, en unos 7 minutos. Tests, CI y validación final: [docs/calidad.md](docs/calidad.md).
@@ -167,7 +192,7 @@ El **CI** ([GitHub Actions](.github/workflows/ci.yml)) corre todo en cada PR, in
 |---|---|
 | [Instalación y ejecución](docs/instalacion.md) | Requisitos, variables de entorno, Docker Compose, ejecución sin Docker, perfil de observabilidad, seed |
 | [Arquitectura](docs/arquitectura.md) | Componentes, modelo de datos, imágenes y MinIO, autocompletado, resiliencia, frontend |
-| [API](docs/api.md) | Endpoints con ejemplos, errores, listado (paginación, filtros, orden) y validación de performance |
+| [API](docs/api.md) | Contrato del enunciado y agregados, endpoints con ejemplos, errores, listado (paginación, filtros, orden) y validación de performance |
 | [Observabilidad y seguridad](docs/observabilidad.md) | Actuator, liveness y readiness, logging estructurado, correlation ID, datos sensibles |
 | [Calidad](docs/calidad.md) | Tests, cobertura, E2E, CI y validación final de punta a punta |
 | [Decisiones técnicas](docs/decisiones.md) | Decisiones técnicas con su justificación |
